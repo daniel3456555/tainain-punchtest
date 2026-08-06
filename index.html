@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台年機械 出勤系統</title>
+<style>
+body{font-family:-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;
+     margin:0;padding:40px 20px;background:#f2f2f2;color:#444;text-align:center}
+.msg{font-size:15px;color:#888}
+.menu{display:none;max-width:320px;margin:20px auto 0;text-align:left}
+.menu a{display:block;background:#fff;padding:14px 16px;margin-bottom:10px;
+        border-radius:8px;text-decoration:none;color:#222;font-size:15px;
+        box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.menu .sub{font-size:12px;color:#999;display:block;margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="msg" id="msg">載入中… / Memuat…</div>
+
+<div class="menu" id="menu">
+  <a href="punch.html?type=in">上班 / Masuk<span class="sub">punch.html?type=in</span></a>
+  <a href="punch.html?type=out">下班 / Pulang<span class="sub">punch.html?type=out</span></a>
+  <a href="leave.html">請假 / Cuti<span class="sub">leave.html</span></a>
+  <a href="query.html">本月出勤 / Absensi<span class="sub">query.html</span></a>
+  <a href="register.html">註冊 / Daftar<span class="sub">register.html</span></a>
+  <a href="test.html">連通性測試（除錯用）<span class="sub">test.html</span></a>
+</div>
+
+<script src="common.js"></script>
+<script>
+(function () {
+  const params = getParams();
+  const page   = params.get("page");
+
+  // 派發表（白名單：不在表內的 page 值一律不轉址）
+  const ROUTES = {
+    punch:    "punch.html",
+    leave:    "leave.html",
+    query:    "query.html",
+    register: "register.html",
+    test:     "test.html"
+  };
+
+  const file = ROUTES[page];
+
+  if (!file) {
+    // 無 page 參數或值不合法 → 顯示手動選單（電腦測試時很好用）
+    document.getElementById("msg").textContent =
+      page ? "無此頁面：" + page : "請選擇功能 / Pilih menu";
+    document.getElementById("menu").style.display = "block";
+    return;
+  }
+
+  // 需要往下帶的參數（type 給打卡頁；debug 給診斷模式；return 給註冊後返回）
+  const carry = {};
+  ["type", "debug", "return"].forEach(function (k) {
+    if (params.get(k)) carry[k] = params.get(k);
+  });
+
+  goPage(file, carry);
+})();
+</script>
+</body>
+</html>
