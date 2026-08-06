@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LIFF 連通性測試</title>
+<style>
+body{font-family:-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;margin:0;padding:16px;background:#f2f2f2;color:#222}
+h1{font-size:17px;margin:0 0 12px}
+.box{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.stage{padding:7px 0;border-bottom:1px solid #eee;font-size:14px;line-height:1.5}
+.stage:last-child{border-bottom:none}
+.tag{display:inline-block;width:30px;font-weight:bold}
+.ok{color:#0a7d28}.ng{color:#c62828}.wa{color:#b26a00}.pd{color:#999}
+.note{font-size:12px;color:#666;word-break:break-all;margin-left:30px}
+#qr{display:flex;justify-content:center;padding:10px}
+pre{background:#f0f0f0;padding:8px;border-radius:4px;font-size:11px;white-space:pre-wrap;word-break:break-all;margin:0}
+</style>
+</head>
+<body>
+<h1>LIFF 連通性最小測試</h1>
+<div class="box" id="stages"></div>
+<div class="box"><div id="qr"><span style="color:#999;font-size:13px">（QR 尚未產生）</span></div></div>
+<div class="box"><pre id="log"></pre></div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+/* ===== 只需修改這兩行 ===== */
+const LIFF_ID  = "2010688930-qTIy4spn";
+const API_BASE = "https://script.google.com/macros/s/AKfycbxUAIdn1rRepHVUq_b2mQXREQmx2Hu5vZpKQYuhU1vRmX-AiZrSFZ4nkfW6g8xU9LK-lQ/exec";
+/* ======================== */
+
+const STAGES = [
+  ["S1","LIFF SDK 載入"],
+  ["S2","liff.init()"],
+  ["S3","取得 userId"],
+  ["S4","呼叫 qr_issue（CORS 驗證）"],
+  ["S5","繪製 QR"]
+];
+
+// 畫出五個階段列
+const box = document.getElementById("stages");
+STAGES.forEach(function(s){
+  box.insertAdjacentHTML("beforeend",
+    '<div class="stage"><span class="tag pd" id="t_'+s[0]+'">'+s[0]+'</span>'+
+    '<span id="m_'+s[0]+'" class="pd">'+s[1]+'…</span>'+
+    '<div class="note" id="n_'+s[0]+'"></div></div>');
+});
+
+function mark(id, cls, msg, note){
+  const t=document.getElementById("t_"+id), m=document.getElementById("m_"+id);
+  t.className="tag "+cls; m.className=cls; m.textContent=msg;
+  if(note) document.getElementById("n_"+id).textContent=note;
+}
+function ok(id,note){ const s=STAGES.find(x=>x[0]===id); mark(id,"ok","✔ "+s[1],note); }
+function ng(id,note){ const s=STAGES.find(x=>x[0]===id); mark(id,"ng","✘ "+s[1],note); done=true; }
+function wa(id,note){ const s=STAGES.find(x=>x[0]===id); mark(id,"wa","▲ "+s[1],note); done=true; }
+function log(t){ document.getElementById("log").textContent += t+"\n"; }
+
+let done=false;
+// 逾時保護（除錯歷程教訓：每頁必備）
+setTimeout(function(){
+  if(done) return;
+  STAGES.forEach(function(s){
+    const m=document.getElementById("m_"+s[0]);
+    if(m.className==="pd") mark(s[0],"ng","✘ "+s[1],"逾時未完成（卡在此階段）");
+  });
+}, 12000);
+
+// 還原 liff.state 內的參數（除錯歷程第1輪的已驗證機制，前端版）
+function getParams(){
+  const p = new URLSearchParams(location.search);
+  const st = p.get("liff.state");
+  if(st){
+    const q = st.indexOf("?")>=0 ? st.split("?")[1] : st.replace(/^\?/,"");
+    new URLSearchParams(q).forEach(function(v,k){ p.set(k,v); });
+  }
+  return p;
+}
+
+(async function main(){
+  const params = getParams();
+  log("網址：" + location.href);
+
+  // S1
+  if(typeof liff === "undefined"){ ng("S1","LIFF SDK 未載入（檢查網路或 CDN）"); return; }
+  ok("S1");
+
+  let userId = null;
+  const dbg = params.get("debug");
+
+  if(dbg){
+    ok("S2","診斷模式：略過 liff.init()");
+    ok("S3","診斷模式：userId 由網址帶入", dbg);
+    userId = dbg;
+  }else{
+    // S2 —— 本次架構變更的關鍵
+    try{
+      await liff.init({ liffId: LIFF_ID });
+      ok("S2","初始化成功 → 網域問題已解決");
+    }catch(e){
+      ng("S2", (e && e.message) ? e.message : String(e));
+      return;
+    }
+    // S3
+    if(!liff.isLoggedIn()){
+      wa("S3","未登入（非 LINE 環境）。在電腦瀏覽器測試時此為正常；S2 已通過即達成本次主要驗證目的。可加 ?debug=你的userId 續測 S4、S5。");
+      return;
+    }
+    try{
+      const prof = await liff.getProfile();
+      userId = prof.userId;
+      ok("S3", userId);
+    }catch(e){ ng("S3", (e && e.message) || String(e)); return; }
+  }
+
+  // S4 —— CORS 驗證
+  let data;
+  try{
+    const url = API_BASE + "?action=qr_issue&userId=" + encodeURIComponent(userId) + "&type=in";
+    log("呼叫：" + url);
+    const res  = await fetch(url);
+    const text = await res.text();
+    log("回應：" + text.slice(0,300));
+    data = JSON.parse(text);
+    if(!data.ok){ ng("S4","後端回傳 ok:false — " + (data.msg||"")); return; }
+    ok("S4","ok:true，nonce=" + String(data.nonce).slice(0,8) + "…，validSeconds=" + data.validSeconds);
+  }catch(e){
+    ng("S4","fetch 或解析失敗（高度懷疑 CORS）：" + ((e && e.message)||String(e)));
+    return;
+  }
+
+  // S5
+  try{
+    const el = document.getElementById("qr");
+    el.innerHTML = "";
+    new QRCode(el, { text:data.qr, width:220, height:220, correctLevel:QRCode.CorrectLevel.M });
+    ok("S5","QR 已繪製");
+    done = true;
+  }catch(e){ ng("S5",(e && e.message)||String(e)); }
+})();
+</script>
+</body>
+</html>
