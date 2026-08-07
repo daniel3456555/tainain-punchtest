@@ -1,0 +1,371 @@
+<!--
+═══════════════════════════════════════════════════════════════
+ 打卡頁 正式版 v4（GitHub Pages 靜態代管版）
+ 由 v3（Apps Script HtmlService 模板版）移植而來。
+ v4 變更：① google.script.run → fetch（common.js 的 apiGet）
+          ② 模板注入 TYPE／LIFF_ID → 前端自取（getParams／common.js 常數）
+          ③ 診斷模式改用 getParams()，含 liff.state 還原（修正 v3 失效問題）
+          ④ needRegister 改為獨立畫面＋按鈕導向 register.html
+ 未變更：五狀態畫面、雙語文案、倒數條、QR 繪製、1.5秒輪詢、
+        8秒逾時保護、階段追蹤、世代序號機制
+ 依據：AppsScript實作規格書v1.0 第9.1節、架構修訂說明_LIFF代管.md
+ ★ 上線前移除：診斷模式（debug 參數）、階段追蹤顯示（見收尾清單）
+═══════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>打卡</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --ink:#1a1d21; --sub:#6b7280; --bg:#f2f4f7; --card:#ffffff;
+    --line:#e5e7eb; --bar:#2563eb; --bar-warn:#f59e0b;
+    --ok:#16a34a; --bad:#dc2626;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  body{
+    font-family:-apple-system,"PingFang TC","Noto Sans TC","Heiti TC",sans-serif;
+    background:var(--bg); color:var(--ink); min-height:100vh;
+  }
+  .screen{display:none; min-height:100vh; padding:20px 16px 40px;}
+  .screen.active{display:flex; flex-direction:column; align-items:center;}
+
+  .head{width:100%; max-width:420px; text-align:center; margin-bottom:14px;}
+  .head .zh{font-size:22px; font-weight:700;}
+  .head .id{font-size:14px; color:var(--sub); margin-top:2px;}
+  .who{display:inline-block; margin-top:10px; background:var(--card);
+       border:1px solid var(--line); border-radius:999px; padding:6px 16px;
+       font-size:15px; font-weight:600; min-height:1em;}
+
+  .card{width:100%; max-width:420px; background:var(--card); border-radius:16px;
+        border:1px solid var(--line); overflow:hidden;
+        box-shadow:0 2px 10px rgba(0,0,0,.05);}
+  .bar-track{height:8px; background:var(--line);}
+  .bar-fill{height:100%; width:100%; background:var(--bar); transition:width 1s linear;}
+  .bar-fill.warn{background:var(--bar-warn);}
+  .qr-wrap{display:flex; justify-content:center; padding:26px 0 10px;}
+  #qrbox{width:236px; height:236px;}
+  #qrbox img, #qrbox canvas{width:236px !important; height:236px !important;}
+  .timer{font-size:14px; color:var(--sub); text-align:center; padding-bottom:14px;}
+  .timer b{color:var(--ink); font-variant-numeric:tabular-nums;}
+
+  .tip{max-width:420px; text-align:center; margin-top:16px; line-height:1.55;}
+  .tip .zh{font-size:17px; font-weight:600;}
+  .tip .id{font-size:14px; color:var(--sub); margin-top:2px;}
+  .hint{max-width:420px; text-align:center; margin-top:14px; font-size:13px;
+        color:var(--sub); line-height:1.6;}
+
+  .full{position:fixed; inset:0; display:none; flex-direction:column;
+        align-items:center; justify-content:center; text-align:center;
+        padding:24px; z-index:50;}
+  .full.active{display:flex;}
+  .full .big-zh{font-size:26px; font-weight:700;}
+  .full .big-id{font-size:16px; opacity:.9; margin-top:4px;}
+
+  #scr-processing{background:rgba(255,255,255,.96); color:var(--ink);}
+  .spinner{width:52px; height:52px; border-radius:50%;
+           border:5px solid var(--line); border-top-color:var(--bar);
+           animation:spin 0.9s linear infinite; margin-bottom:22px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  #scr-success{background:var(--ok); color:#fff;}
+  #scr-error{background:var(--bad); color:#fff;}
+  .mark{font-size:64px; line-height:1; margin-bottom:14px;}
+  .stamp-time{font-size:52px; font-weight:800; letter-spacing:1px;
+              font-variant-numeric:tabular-nums; margin:18px 0 2px;}
+  .stamp-date{font-size:16px; opacity:.92;}
+  .stamp-name{margin-top:18px; font-size:19px; font-weight:600;
+              background:rgba(255,255,255,.18); border-radius:999px;
+              padding:8px 22px;}
+  .stamp-type{margin-top:10px; font-size:15px; opacity:.92;}
+
+  .btn{margin-top:26px; border:none; border-radius:14px; padding:16px 30px;
+       font-size:18px; font-weight:700; font-family:inherit; cursor:pointer;
+       width:100%; max-width:320px; line-height:1.4;}
+  .btn .id{display:block; font-size:13px; font-weight:500; opacity:.85;}
+  .btn-blue{background:var(--bar); color:#fff;}
+  .btn-white{background:#fff; color:var(--bad);}
+  #err-msg{margin-top:10px; font-size:13px; opacity:.85; word-break:break-all;
+           max-width:340px;}
+  #stage-tag{margin-top:26px; font-size:12px; color:var(--sub);}
+</style>
+</head>
+<body>
+
+<!-- 顯示QR -->
+<div class="screen" id="scr-qr">
+  <div class="head">
+    <div class="zh" id="type-zh">上班打卡</div>
+    <div class="id" id="type-id">Absen Masuk</div>
+    <div class="who" id="who"></div>
+  </div>
+  <div class="card">
+    <div class="bar-track"><div class="bar-fill" id="bar"></div></div>
+    <div class="qr-wrap"><div id="qrbox"></div></div>
+    <div class="timer">有效時間 / Berlaku：<b id="sec">180</b> 秒 / detik</div>
+  </div>
+  <div class="tip">
+    <div class="zh">請將QR Code對準掃描器</div>
+    <div class="id">Arahkan QR Code ke pemindai</div>
+  </div>
+  <div class="hint">
+    掃描後請稍候幾秒，畫面轉綠即完成<br>
+    Setelah dipindai, tunggu beberapa detik hingga layar berubah hijau
+  </div>
+</div>
+
+<!-- 處理中 -->
+<div class="full active" id="scr-processing">
+  <div class="spinner"></div>
+  <div class="big-zh">處理中…</div>
+  <div class="big-id">Memproses…</div>
+  <div id="stage-tag">階段：啟動中</div>
+</div>
+
+<!-- 成功 -->
+<div class="full" id="scr-success">
+  <div class="mark">✔</div>
+  <div class="big-zh">打卡成功</div>
+  <div class="big-id">Absen Berhasil</div>
+  <div class="stamp-time" id="ok-time"></div>
+  <div class="stamp-date" id="ok-date"></div>
+  <div class="stamp-name" id="ok-name"></div>
+  <div class="stamp-type" id="ok-type"></div>
+</div>
+
+<!-- 過期 -->
+<div class="screen" id="scr-expired">
+  <div class="head" style="margin-top:16vh">
+    <div class="mark" style="font-size:56px">⏱</div>
+    <div class="zh" style="font-size:20px; margin-top:10px">QR Code已過期，請重新整理</div>
+    <div class="id" style="margin-top:4px">QR Code kedaluwarsa, silakan muat ulang</div>
+  </div>
+  <button class="btn btn-blue" onclick="startFlow()">重新產生 QR Code
+    <span class="id">Buat ulang QR Code</span></button>
+</div>
+
+<!-- 尚未註冊 -->
+<div class="screen" id="scr-register">
+  <div class="head" style="margin-top:16vh">
+    <div class="mark" style="font-size:56px">👤</div>
+    <div class="zh" style="font-size:20px; margin-top:10px">尚未註冊，請先完成註冊</div>
+    <div class="id" style="margin-top:4px">Belum terdaftar, silakan daftar dulu</div>
+  </div>
+  <button class="btn btn-blue" onclick="gotoRegister()">前往註冊
+    <span class="id">Daftar sekarang</span></button>
+</div>
+
+<!-- 異常 -->
+<div class="full" id="scr-error">
+  <div class="mark">✕</div>
+  <div class="big-zh">打卡失敗，請重試或通知管理員</div>
+  <div class="big-id">Absen gagal, coba lagi atau hubungi admin</div>
+  <div id="err-msg"></div>
+  <button class="btn btn-white" onclick="startFlow()">重試
+    <span class="id" style="color:inherit">Coba lagi</span></button>
+</div>
+
+<script src="common.js"></script>
+<script>
+/* ── 由網址參數取得打卡類型（LIFF_ID／API_BASE 來自 common.js） ── */
+var PARAMS = getParams();
+var TYPE   = (PARAMS.get('type') === 'out') ? 'out' : 'in';
+
+var USER_ID   = null;
+var EMP_NAME  = '';
+var secLeft   = 180;
+var totalSec  = 180;
+var timerId   = null;
+var pollId    = null;
+var generation = 0;               // 世代序號：重產後舊流程自動失效
+
+function show(id){
+  var list = document.querySelectorAll('.screen,.full');
+  for(var i=0;i<list.length;i++) list[i].classList.remove('active');
+  document.getElementById(id).classList.add('active');
+}
+function stopTimers(){
+  if(timerId){ clearInterval(timerId); timerId = null; }
+  if(pollId){ clearInterval(pollId); pollId = null; }
+}
+function fail(msg){
+  stopTimers();
+  document.getElementById('err-msg').textContent = msg || '';
+  show('scr-error');
+}
+function gotoRegister(){
+  goPage('register.html', { return: 'punch', type: TYPE });
+}
+
+/* ── 階段追蹤（除錯用，顯示於處理中畫面下方；上線前移除） ── */
+var STAGE = 'A-啟動';
+function setStage(s){
+  STAGE = s;
+  var el = document.getElementById('stage-tag');
+  if(el) el.textContent = '階段：' + s;
+}
+
+/* ── 進入點 ── */
+(function init(){
+  document.getElementById('type-zh').textContent = TYPE==='in'?'上班打卡':'下班打卡';
+  document.getElementById('type-id').textContent = TYPE==='in'?'Absen Masuk':'Absen Pulang';
+
+  /* 【診斷模式】網址帶 debug=<userId> → 跳過 LIFF，直接往下走
+     （★上線前移除本段；QR 仍由後端簽發，簽章/時效/nonce 驗證不受影響） */
+  var dbg = PARAMS.get('debug');
+  if(dbg){
+    setStage('D-診斷模式');
+    USER_ID = dbg;
+    startFlow();
+    return;
+  }
+
+  /* 逾時保護：8秒內未取得 userId 即中止，顯示卡在哪一階段 */
+  var guard = setTimeout(function(){
+    if(!USER_ID){
+      fail('取得身份逾時（卡在 ' + STAGE + '）／Timeout');
+    }
+  }, (typeof INIT_TIMEOUT_MS !== 'undefined') ? INIT_TIMEOUT_MS : 8000);
+  function ok(uid){
+    clearTimeout(guard);
+    USER_ID = uid;
+    startFlow();
+  }
+  function ng(msg){
+    clearTimeout(guard);
+    fail(msg);
+  }
+
+  setStage('B-檢查SDK');
+  if(typeof liff === 'undefined'){
+    ng('LIFF SDK 未載入／請從 LINE 選單重新開啟');
+    return;
+  }
+
+  setStage('C-初始化LIFF');
+  liff.init({ liffId: LIFF_ID }).then(function(){
+    setStage('E-讀取Context');
+    var ctx = null;
+    try { ctx = liff.getContext(); } catch(e){}
+
+    if(ctx && ctx.userId){ ok(ctx.userId); return; }
+
+    setStage('F-檢查登入狀態');
+    if(!liff.isLoggedIn()){
+      ng('未登入／請從 LINE 選單重新開啟');
+      return;
+    }
+
+    setStage('G-取得Profile');
+    liff.getProfile().then(function(p){
+      ok(p.userId);
+    }).catch(function(e){
+      ng('取得Profile失敗：' + (e && e.message ? e.message : ''));
+    });
+
+  }).catch(function(err){
+    ng('LIFF初始化失敗：' + (err && err.message ? err.message : ''));
+  });
+})();
+
+/* ── 主流程：簽發QR → 顯示 → 倒數＋輪詢 ── */
+function startFlow(){
+  stopTimers();
+  generation++;
+  var myGen = generation;
+  show('scr-processing');
+  setStage('H-取得QR');
+
+  apiGet('qr_issue', { userId: USER_ID, type: TYPE })
+    .then(function(d){
+      if(myGen !== generation) return;
+      onQrIssued(d, myGen);
+    })
+    .catch(function(err){
+      if(myGen !== generation) return;
+      fail('連線失敗：' + (err && err.message ? err.message : ''));
+    });
+}
+
+function onQrIssued(d, myGen){
+  if(d.needRegister){
+    stopTimers();
+    show('scr-register');
+    return;
+  }
+  if(!d.ok){ fail(d.msg || ''); return; }
+
+  if(d.name){
+    EMP_NAME = d.name;
+    document.getElementById('who').textContent = d.name;
+  }
+
+  /* 繪製 QR */
+  var box = document.getElementById('qrbox');
+  box.innerHTML = '';
+  try {
+    new QRCode(box, {
+      text: d.qr, width: 236, height: 236,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(e){
+    fail('QR 產生失敗 / Gagal membuat QR');
+    return;
+  }
+
+  /* 倒數 */
+  totalSec = d.validSeconds || 180;
+  secLeft  = totalSec;
+  updateBar();
+  show('scr-qr');
+
+  timerId = setInterval(function(){
+    if(myGen !== generation) return;
+    secLeft--;
+    updateBar();
+    if(secLeft <= 0){
+      stopTimers();
+      show('scr-expired');
+    }
+  }, 1000);
+
+  /* 輪詢：每1.5秒查 nonce 是否已消耗（＝Sheets已寫入） */
+  pollId = setInterval(function(){
+    if(myGen !== generation) return;
+    apiGet('poll', { nonce: d.nonce })
+      .then(function(p){
+        if(myGen !== generation) return;
+        if(p.ok && p.consumed){
+          stopTimers();
+          showSuccess(p.time);
+        }
+      })
+      .catch(function(){ /* 單次失敗容忍，下一輪再試 */ });
+  }, 1500);
+}
+
+function updateBar(){
+  document.getElementById('sec').textContent = Math.max(0, secLeft);
+  var bar = document.getElementById('bar');
+  bar.style.width = Math.max(0, secLeft/totalSec*100) + '%';
+  if(secLeft <= 30) bar.classList.add('warn');
+  else bar.classList.remove('warn');
+}
+
+/* 成功畫面：只顯示後端回傳的寫入時間（規格鐵則：前端不自取時間） */
+function showSuccess(timeStr){
+  var parts = (timeStr || '').split(' ');
+  document.getElementById('ok-time').textContent = parts[1] || timeStr || '';
+  document.getElementById('ok-date').textContent = parts[0] || '';
+  document.getElementById('ok-name').textContent = EMP_NAME;
+  document.getElementById('ok-type').textContent =
+    TYPE==='in' ? '上班 / Masuk' : '下班 / Pulang';
+  show('scr-success');
+}
+</script>
+</body>
+</html>
