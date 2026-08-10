@@ -1,0 +1,159 @@
+<!--
+═══════════════════════════════════════════════════════════════
+ QR 掃描測試頁 scan.html
+ 用途：以筆電/手機的相機模擬掃描器，驗證
+       ① QR 內容能否被相機正確讀出（密度、反光、亮度的早期參考）
+       ② 端對端流程：手機顯示QR → 掃描 → POST寫入 → 手機轉綠
+ 定位：**早期參考，非硬體驗收**。相機與 CMOS 掃描器成像原理不同，
+       讀得到不代表掃描器讀得到，反之亦然。
+ ★ 上線前刪除本檔（與 test.html 一併評估）
+═══════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR 掃描測試</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<style>
+body{font-family:-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;
+     margin:0;padding:16px;background:#f2f2f2;color:#222}
+h1{font-size:17px;margin:0 0 4px}
+.sub{font-size:12px;color:#888;margin-bottom:14px}
+.box{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;
+     box-shadow:0 1px 3px rgba(0,0,0,.12)}
+#video{width:100%;max-width:480px;border-radius:8px;background:#000;display:block}
+#canvas{display:none}
+button{padding:10px 18px;font-size:15px;border-radius:8px;border:1px solid #ccc;
+       background:#fff;font-family:inherit;cursor:pointer;margin-right:8px}
+button.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+.stat{font-size:14px;line-height:1.9}
+.stat b{display:inline-block;width:92px;color:#666;font-weight:normal}
+.ok{color:#0a7d28;font-weight:bold}.ng{color:#c62828;font-weight:bold}
+.wa{color:#b26a00;font-weight:bold}
+pre{background:#f0f0f0;padding:8px;border-radius:4px;font-size:11px;
+    white-space:pre-wrap;word-break:break-all;margin:0;max-height:220px;overflow:auto}
+label{font-size:14px}
+</style>
+</head>
+<body>
+
+<h1>QR 掃描測試（相機模擬掃描器）</h1>
+<div class="sub">早期參考用途，非硬體驗收 / 上線前刪除本檔</div>
+
+<div class="box">
+  <button class="primary" id="btn-start">啟動相機</button>
+  <button id="btn-stop">停止</button>
+  <div style="margin-top:10px">
+    <label><input type="checkbox" id="chk-send"> 讀到後自動送出打卡（會寫入測試表）</label>
+  </div>
+</div>
+
+<div class="box"><video id="video" playsinline></video><canvas id="canvas"></canvas></div>
+
+<div class="box stat">
+  <div><b>相機</b><span id="s-cam" class="wa">未啟動</span></div>
+  <div><b>掃描狀態</b><span id="s-scan">—</span></div>
+  <div><b>讀取耗時</b><span id="s-time">—</span></div>
+  <div><b>送出結果</b><span id="s-post">—</span></div>
+</div>
+
+<div class="box"><pre id="log">（記錄）</pre></div>
+
+<script src="common.js"></script>
+<script>
+var video  = document.getElementById('video');
+var canvas = document.getElementById('canvas');
+var ctx    = canvas.getContext('2d', { willReadFrequently: true });
+var stream = null, running = false, startAt = 0, lastQr = '', busy = false;
+
+function el(id){ return document.getElementById(id); }
+function log(t){
+  var p = el('log');
+  if(p.textContent === '（記錄）') p.textContent = '';
+  p.textContent += new Date().toLocaleTimeString() + '  ' + t + '\n';
+  p.scrollTop = p.scrollHeight;
+}
+function set(id, text, cls){
+  var e = el(id); e.textContent = text; e.className = cls || '';
+}
+
+el('btn-start').onclick = async function(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 } }
+    });
+    video.srcObject = stream;
+    await video.play();
+    set('s-cam', '運作中', 'ok');
+    log('相機啟動：' + video.videoWidth + '×' + video.videoHeight);
+    running = true; startAt = Date.now(); lastQr = '';
+    set('s-scan', '掃描中…', 'wa');
+    requestAnimationFrame(tick);
+  }catch(e){
+    set('s-cam', '啟動失敗', 'ng');
+    log('相機錯誤：' + e.message);
+  }
+};
+
+el('btn-stop').onclick = function(){
+  running = false;
+  if(stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
+  set('s-cam', '已停止', 'wa');
+};
+
+function tick(){
+  if(!running) return;
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    var img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if(code && code.data && code.data !== lastQr){
+      lastQr = code.data;
+      onScanned(code.data);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function onScanned(text){
+  var ms = Date.now() - startAt;
+  set('s-scan', '已讀取（' + text.length + ' 字元）', 'ok');
+  set('s-time', ms + ' ms');
+  log('讀到 QR：' + text.length + ' 字元，耗時 ' + ms + ' ms');
+  log('內容前 80 字：' + text.slice(0, 80));
+
+  if(!el('chk-send').checked){
+    set('s-post', '未勾選自動送出', 'wa');
+    startAt = Date.now();
+    return;
+  }
+  if(busy) return;
+  busy = true;
+  set('s-post', '送出中…', 'wa');
+
+  fetch(API_BASE, {
+    method: 'POST',
+    body: new URLSearchParams({ action: 'punch', qr: text })
+  })
+  .then(function(r){ return r.text(); })
+  .then(function(t){
+    log('後端回應：' + t);
+    var okFlag = t.indexOf('"ok":true') >= 0;
+    set('s-post', t.slice(0, 70), okFlag ? 'ok' : 'ng');
+  })
+  .catch(function(e){
+    log('送出失敗：' + e.message);
+    set('s-post', '送出失敗：' + e.message, 'ng');
+  })
+  .finally(function(){
+    busy = false;
+    startAt = Date.now();
+  });
+}
+</script>
+</body>
+</html>
