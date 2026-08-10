@@ -216,10 +216,17 @@ function setStage(s){
 
   /* 【診斷模式】網址帶 debug=<userId> → 跳過 LIFF，直接往下走
      （★上線前移除本段；QR 仍由後端簽發，簽章/時效/nonce 驗證不受影響） */
-  var dbg = PARAMS.get('debug');
-  if(dbg){
+  /* 【診斷模式】?debug=1 → 由 localStorage 取 userId（不寫在網址列）
+     首次使用：Console 執行 localStorage.setItem('devUid','U...')
+     ★上線前移除本段 */
+  if(PARAMS.get('debug')){
+    var saved = localStorage.getItem('devUid');
+    if(!saved){
+      fail("診斷模式未設定：請在 Console 執行 localStorage.setItem('devUid','你的userId')");
+      return;
+    }
     setStage('D-診斷模式');
-    USER_ID = dbg;
+    USER_ID = saved;
     startFlow();
     return;
   }
@@ -322,6 +329,32 @@ function onQrIssued(d, myGen){
   secLeft  = totalSec;
   updateBar();
   show('scr-qr');
+ /* ★★★ 測試按鈕：模擬掃描器送出當前這份 QR ★★★
+     驗證「寫入→nonce消耗→轉綠」用，測完整段刪除
+     僅在 ?debug=1 時出現，員工不會看到 */
+  if(PARAMS.get('debug')){
+    var old = document.getElementById('sim-btn');
+    if(old) old.remove();
+    var b = document.createElement('button');
+    b.id = 'sim-btn';
+    b.textContent = '🔧 模擬掃描（測試用）';
+    b.style.cssText = 'margin-top:18px;padding:12px 24px;font-size:15px;'
+                    + 'border:1px solid #ccc;border-radius:10px;background:#fff;'
+                    + 'font-family:inherit;cursor:pointer;';
+    b.onclick = function(){
+      b.disabled = true;
+      b.textContent = '送出中…';
+      fetch(API_BASE, {
+        method: 'POST',
+        body: new URLSearchParams({ action: 'punch', qr: d.qr })
+      })
+      .then(function(r){ return r.text(); })
+      .then(function(t){ b.textContent = '已送出：' + t.slice(0, 60); })
+      .catch(function(e){ b.textContent = '送出失敗：' + e.message; b.disabled = false; });
+    };
+    document.getElementById('scr-qr').appendChild(b);
+  }
+  /* ★★★ 測試按鈕結束 ★★★ */
 
   timerId = setInterval(function(){
     if(myGen !== generation) return;
