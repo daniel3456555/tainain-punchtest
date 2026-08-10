@@ -1,12 +1,31 @@
 /* ===== LINE打卡系統 前端共用設定 =====
-   四頁 HTML 共用。修改設定只需改本檔。 */
+   四頁 HTML 共用。修改設定只需改本檔。
+   架構：每頁一個 LIFF ID，LINE 直接開啟目標頁，不經過任何轉址。 */
 
-/* ── 需要維護的兩個值 ── */
-const LIFF_ID  = "2010688930-qTIy4spn";
+/* ── 需要維護的地方 ── */
+
+// Apps Script Web App 部署網址（/exec 結尾）
 const API_BASE = "https://script.google.com/macros/s/AKfycbxUAIdn1rRepHVUq_b2mQXREQmx2Hu5vZpKQYuhU1vRmX-AiZrSFZ4nkfW6g8xU9LK-lQ/exec";
-/* ───────────────────── */
+
+// 檔名 → LIFF ID 對照表
+// 新增頁面時：先在 LINE Developers 建 LIFF app，再把對照加進這裡
+const LIFF_IDS = {
+  "punch.html":    "2010688930-qTIy4spn",
+  "leave.html":    "2010688930-aRI5hLPO",
+  "query.html":    "2010688930-6Y25x5Ju",
+  "register.html": "2010688930-WfDnNsxc"
+};
+/* ─────────────────── */
 
 const INIT_TIMEOUT_MS = 8000;   // 取得身分的逾時保護（除錯歷程教訓，勿移除）
+
+/* 依當前網址的檔名取得本頁的 LIFF ID */
+function getLiffId() {
+  const file = location.pathname.split("/").pop() || "";
+  const id = LIFF_IDS[file];
+  if (!id) throw new Error("此頁面未登記 LIFF ID：" + file);
+  return id;
+}
 
 /* 取得網址參數，並還原 LIFF 包在 liff.state 裡的參數 */
 function getParams() {
@@ -20,10 +39,10 @@ function getParams() {
 }
 
 /* 頁面跳轉：一律相對路徑（repo 改名不會斷鏈）
-   用 replace 不用 href，避免返回鍵回到派發器造成無限彈回 */
+   註：跨 LIFF ID 的跳轉行為尚未實測，見待辦事項 */
 function goPage(file, params) {
   const qs = params ? new URLSearchParams(params).toString() : "";
-  location.replace(file + (qs ? "?" + qs : ""));
+  location.href = file + (qs ? "?" + qs : "");
 }
 
 /* 呼叫後端資料端點（GET） */
@@ -54,7 +73,7 @@ async function initLiffAndGetUserId() {
     setTimeout(function () { reject(new Error("取得身分逾時")); }, INIT_TIMEOUT_MS);
   });
 
-  await Promise.race([liff.init({ liffId: LIFF_ID }), timeout]);
+  await Promise.race([liff.init({ liffId: getLiffId() }), timeout]);
 
   if (!liff.isLoggedIn()) throw new Error("未登入（請在 LINE 內開啟本頁）");
 
