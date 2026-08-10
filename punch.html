@@ -247,7 +247,7 @@ function setStage(s){
   }
 
   setStage('C-初始化LIFF');
-  liff.init({ liffId: LIFF_ID }).then(function(){
+  liff.init({ liffId: getLiffId() }).then(function(){
     setStage('E-讀取Context');
     var ctx = null;
     try { ctx = liff.getContext(); } catch(e){}
