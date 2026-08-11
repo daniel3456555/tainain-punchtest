@@ -6,6 +6,7 @@
 
 // Apps Script Web App 部署網址（/exec 結尾）
 const API_BASE = "https://script.google.com/macros/s/AKfycbxUAIdn1rRepHVUq_b2mQXREQmx2Hu5vZpKQYuhU1vRmX-AiZrSFZ4nkfW6g8xU9LK-lQ/exec";
+const API_TIMEOUT_MS = 15000;   // apiGet 逾時（毫秒）；2026/08/11 加入
 
 // 檔名 → LIFF ID 對照表
 // 新增頁面時：先在 LINE Developers 建 LIFF app，再把對照加進這裡
@@ -45,17 +46,31 @@ function goPage(file, params) {
   location.href = file + (qs ? "?" + qs : "");
 }
 
-/* 呼叫後端資料端點（GET） */
-async function apiGet(action, params) {
+/* 呼叫後端資料端點（GET）
+   2026/08/11 加入逾時保護：原為裸 fetch，後端無回應時會無限等待，
+   症狀為「永遠停在處理中」。第三參數可覆寫秒數，不傳則用 API_TIMEOUT_MS。 */
+async function apiGet(action, params, timeoutMs) {
   const p = new URLSearchParams(params || {});
   p.set("action", action);
-  const res  = await fetch(API_BASE + "?" + p.toString());
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    throw new Error("後端回應非 JSON：" + text.slice(0, 200));
-  }
+  const ms = timeoutMs || API_TIMEOUT_MS;
+
+  const work = (async function () {
+    const res  = await fetch(API_BASE + "?" + p.toString());
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw new Error("後端回應非 JSON：" + text.slice(0, 200));
+    }
+  })();
+
+  const timeout = new Promise(function (_, reject) {
+    setTimeout(function () {
+      reject(new Error("後端無回應（逾時 " + (ms / 1000) + " 秒）"));
+    }, ms);
+  });
+
+  return Promise.race([work, timeout]);
 }
 
 /* 初始化 LIFF 並取得 userId（含逾時保護）
