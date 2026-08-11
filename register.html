@@ -1,11 +1,14 @@
 <!--
 ═══════════════════════════════════════════════════════════════
- 註冊頁 register.html — 第3段版本（接 unbound，尚未接 register）
+ 註冊頁 register.html — 第4段版本（已接 action=register）
  LIFF ID：2010688930-WfDnNsxc（登記於 common.js 的 LIFF_IDS）
  依據：AppsScript實作規格書v1.0 第8節、架構修訂說明_LIFF代管.md
  樣式與結構沿用 punch.html v4.1（同一套 token、show()、setStage()）
 
- ⚠️ 本版尚未實作：按「確定送出」只顯示佔位訊息，不會呼叫 action=register
+ 結果分三種：
+   ① ok:true                      → 綠屏「註冊完成」
+   ② msg 開頭「此LINE帳號已綁定」 → 藍屏「你已經完成註冊」（中性，非錯誤）
+   ③ 其他 ok:false 或連線失敗     → 紅屏，後端原文照顯示（方案B）
  ★ 上線前移除：診斷模式（debug 參數）、階段追蹤顯示（見收尾清單）
 ═══════════════════════════════════════════════════════════════
 -->
@@ -20,7 +23,7 @@
   :root{
     --ink:#1a1d21; --sub:#6b7280; --bg:#f2f4f7; --card:#ffffff;
     --line:#e5e7eb; --bar:#2563eb;
-    --ok:#16a34a; --bad:#dc2626;
+    --ok:#16a34a; --bad:#dc2626; --info:#1d4ed8;
   }
   *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
   body{
@@ -62,6 +65,7 @@
   .btn-ghost{background:#fff; color:var(--ink); border:1px solid var(--line);}
   .btn-ghost .id{color:var(--sub); opacity:1;}
   .btn-white{background:#fff; color:var(--bad);}
+  .btn-white-info{background:#fff; color:var(--info);}
 
   .foot{max-width:420px; margin-top:auto; padding-top:30px; text-align:center;
         font-size:13px; color:var(--sub); line-height:1.6;}
@@ -87,11 +91,12 @@
   /* 撰寫原則8：reduced-motion 不可完全靜止（會被誤判為當機），改用不涉位移的淡入淡出 */
   @keyframes fade{0%,100%{opacity:1;} 50%{opacity:.25;}}
   @media (prefers-reduced-motion:reduce){
-    .spinner{animation:fade 1.4s ease-in-out infinite; border-top-color:var(--bar);}
+    .spinner{animation:fade 1.4s ease-in-out infinite;}
   }
 
   #scr-success{background:var(--ok); color:#fff;}
   #scr-error{background:var(--bad); color:#fff;}
+  #scr-already{background:var(--info); color:#fff;}
   .mark{font-size:64px; line-height:1; margin-bottom:14px;}
   .ok-name{margin-top:20px; font-size:26px; font-weight:800;
            background:rgba(255,255,255,.18); border-radius:14px; padding:14px 26px;}
@@ -148,7 +153,7 @@
     <div class="zh">確認後將綁定你的 LINE 帳號</div>
     <div class="id">Akun LINE Anda akan dihubungkan</div>
   </div>
-  <button class="btn btn-blue" onclick="doRegister()">確定送出
+  <button class="btn btn-blue" id="btn-confirm" onclick="doRegister()">確定送出
     <span class="id">Ya, kirim</span></button>
   <button class="btn btn-ghost" onclick="show('scr-pick')">返回修改
     <span class="id">Kembali</span></button>
@@ -188,6 +193,19 @@
   </div>
 </div>
 
+<!-- ══ 已註冊過（中性提示，非錯誤） ══ -->
+<div class="full" id="scr-already">
+  <div class="mark">ℹ</div>
+  <div class="big-zh">你已經完成註冊</div>
+  <div class="big-id">Anda sudah terdaftar</div>
+  <div class="ok-name" id="already-name"></div>
+  <div class="ok-tip">請回 LINE 使用下方選單打卡
+    <span class="id">Kembali ke LINE, gunakan menu di bawah untuk absen</span></div>
+  <div class="foot" style="color:rgba(255,255,255,.85); margin-top:24px; padding-top:0">
+    如需更改，請洽管理員<br>Jika perlu diubah, hubungi admin
+  </div>
+</div>
+
 <!-- ══ F/H 失敗（含逾時，標題可切換） ══ -->
 <div class="full" id="scr-error">
   <div class="mark">✕</div>
@@ -207,13 +225,17 @@
 var USER_ID = null;
 var LIST    = [];
 
+/* 已綁定訊息的比對前綴（後端 Register.gs 的字串；改動時此處需同步）
+   比對失敗只會退回紅屏失敗畫面，不影響註冊寫入結果 */
+var ALREADY_PREFIX = '此LINE帳號已綁定';
+
 function show(id){
   var list = document.querySelectorAll('.screen,.full');
   for(var i=0;i<list.length;i++) list[i].classList.remove('active');
   document.getElementById(id).classList.add('active');
 }
 
-/* 失敗畫面：kind='fail' 為註冊失敗、'timeout' 為連線逾時 */
+/* 失敗畫面：kind='timeout' 為連線逾時，其餘為註冊失敗 */
 function fail(msg, kind){
   if(kind === 'timeout'){
     document.getElementById('err-zh').textContent = '連線逾時';
@@ -292,12 +314,39 @@ function pickedId(){
 
 function toConfirm(){
   document.getElementById('who-box').textContent = pickedText();
+  document.getElementById('btn-confirm').disabled = false;
   show('scr-confirm');
 }
 
-/* ── ★ 第3段佔位：尚未接 action=register ★ ── */
+/* ── 送出註冊（action=register） ── */
 function doRegister(){
-  fail('【第3段測試】尚未實作寫入。選到的是：' + pickedId() + ' ' + pickedText());
+  /* 防連按：按下即停用，失敗時由 location.reload() 重來 */
+  document.getElementById('btn-confirm').disabled = true;
+
+  setStage('I-送出註冊');
+  show('scr-processing');
+
+  apiGet('register', { userId: USER_ID, empId: pickedId() })
+    .then(function(d){
+      if(d.ok){
+        document.getElementById('ok-name').textContent =
+          (d.empId || pickedId()) + '　' + (d.name || '');
+        show('scr-success');
+        return;
+      }
+      /* 已綁定過 → 中性提示，不顯示為錯誤（實際上此人已註冊成功） */
+      var msg = d.msg || '';
+      if(msg.indexOf(ALREADY_PREFIX) === 0){
+        var nm = msg.split('：')[1] || '';
+        document.getElementById('already-name').textContent = nm;
+        show('scr-already');
+        return;
+      }
+      fail(msg || '註冊失敗');
+    })
+    .catch(function(e){
+      fail(e && e.message ? e.message : '註冊失敗', 'timeout');
+    });
 }
 </script>
 </body>
