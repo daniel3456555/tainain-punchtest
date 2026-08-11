@@ -1,11 +1,13 @@
 <!--
 ═══════════════════════════════════════════════════════════════
- 打卡頁 正式版 v4（GitHub Pages 靜態代管版）
+ 打卡頁 正式版 v4.1（GitHub Pages 靜態代管版）
  由 v3（Apps Script HtmlService 模板版）移植而來。
  v4 變更：① google.script.run → fetch（common.js 的 apiGet）
           ② 模板注入 TYPE／LIFF_ID → 前端自取（getParams／common.js 常數）
           ③ 診斷模式改用 getParams()，含 liff.state 還原（修正 v3 失效問題）
           ④ needRegister 改為獨立畫面＋按鈕導向 register.html
+v4.1 變更：apiGet 加入逾時保護（改在 common.js，本頁程式碼未動）
+            —— 原本 qr_issue 卡住會永遠停在「處理中／階段：H-取得QR」
  未變更：五狀態畫面、雙語文案、倒數條、QR 繪製、1.5秒輪詢、
         8秒逾時保護、階段追蹤、世代序號機制
  依據：AppsScript實作規格書v1.0 第9.1節、架構修訂說明_LIFF代管.md
