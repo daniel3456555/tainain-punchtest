@@ -6,7 +6,7 @@
 
 // Apps Script Web App 部署網址（/exec 結尾）
 const API_BASE = "https://script.google.com/macros/s/AKfycbxUAIdn1rRepHVUq_b2mQXREQmx2Hu5vZpKQYuhU1vRmX-AiZrSFZ4nkfW6g8xU9LK-lQ/exec";
-const API_TIMEOUT_MS = 1;   // apiGet 逾時（毫秒）；2026/08/11 加入
+const API_TIMEOUT_MS = 15000;   // apiGet 逾時（毫秒）；2026/08/11 加入
 
 // 檔名 → LIFF ID 對照表
 // 新增頁面時：先在 LINE Developers 建 LIFF app，再把對照加進這裡
