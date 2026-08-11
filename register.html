@@ -1,0 +1,304 @@
+<!--
+═══════════════════════════════════════════════════════════════
+ 註冊頁 register.html — 第3段版本（接 unbound，尚未接 register）
+ LIFF ID：2010688930-WfDnNsxc（登記於 common.js 的 LIFF_IDS）
+ 依據：AppsScript實作規格書v1.0 第8節、架構修訂說明_LIFF代管.md
+ 樣式與結構沿用 punch.html v4.1（同一套 token、show()、setStage()）
+
+ ⚠️ 本版尚未實作：按「確定送出」只顯示佔位訊息，不會呼叫 action=register
+ ★ 上線前移除：診斷模式（debug 參數）、階段追蹤顯示（見收尾清單）
+═══════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>員工註冊</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root{
+    --ink:#1a1d21; --sub:#6b7280; --bg:#f2f4f7; --card:#ffffff;
+    --line:#e5e7eb; --bar:#2563eb;
+    --ok:#16a34a; --bad:#dc2626;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  body{
+    font-family:-apple-system,"PingFang TC","Noto Sans TC","Heiti TC",sans-serif;
+    background:var(--bg); color:var(--ink); min-height:100vh;
+  }
+  .screen{display:none; min-height:100vh; padding:24px 16px 40px;}
+  .screen.active{display:flex; flex-direction:column; align-items:center;}
+
+  .head{width:100%; max-width:420px; text-align:center; margin-bottom:22px;}
+  .head .zh{font-size:22px; font-weight:700;}
+  .head .id{font-size:14px; color:var(--sub); margin-top:3px;}
+
+  .lead{width:100%; max-width:420px; text-align:center; margin-bottom:20px; line-height:1.5;}
+  .lead .zh{font-size:17px; font-weight:600;}
+  .lead .id{font-size:14px; color:var(--sub); margin-top:2px;}
+
+  .card{width:100%; max-width:420px; background:var(--card); border-radius:16px;
+        border:1px solid var(--line); padding:18px 16px;
+        box-shadow:0 2px 10px rgba(0,0,0,.05);}
+  .flabel{font-size:14px; font-weight:600; margin-bottom:8px;}
+  .flabel .id{font-size:13px; font-weight:400; color:var(--sub); margin-left:4px;}
+  select{
+    width:100%; font-size:19px; padding:15px 40px 15px 14px;
+    border:1px solid var(--line); border-radius:12px;
+    background:#fff; color:var(--ink); font-family:inherit;
+    -webkit-appearance:none; appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%236b7280' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 12px center;
+  }
+  select:focus{outline:3px solid #bfdbfe; outline-offset:1px; border-color:var(--bar);}
+
+  .btn{margin-top:20px; border:none; border-radius:14px; padding:16px 30px;
+       font-size:18px; font-weight:700; font-family:inherit; cursor:pointer;
+       width:100%; max-width:420px; line-height:1.4;}
+  .btn .id{display:block; font-size:13px; font-weight:500; opacity:.85;}
+  .btn-blue{background:var(--bar); color:#fff;}
+  .btn-blue:disabled{background:#c9ced6; color:#8d949c; cursor:not-allowed;}
+  .btn-ghost{background:#fff; color:var(--ink); border:1px solid var(--line);}
+  .btn-ghost .id{color:var(--sub); opacity:1;}
+  .btn-white{background:#fff; color:var(--bad);}
+
+  .foot{max-width:420px; margin-top:auto; padding-top:30px; text-align:center;
+        font-size:13px; color:var(--sub); line-height:1.6;}
+
+  /* 姓名確認框：整個流程唯一的攔截點，做到最顯眼 */
+  .who{width:100%; max-width:420px; text-align:center;
+       font-size:28px; font-weight:800; letter-spacing:1px;
+       background:#eef4ff; border:2px solid var(--bar); border-radius:14px;
+       padding:22px 16px; margin:6px 0 18px;}
+
+  .full{position:fixed; inset:0; display:none; flex-direction:column;
+        align-items:center; justify-content:center; text-align:center;
+        padding:24px; z-index:50;}
+  .full.active{display:flex;}
+  .full .big-zh{font-size:26px; font-weight:700;}
+  .full .big-id{font-size:16px; opacity:.9; margin-top:4px;}
+
+  #scr-processing{background:rgba(255,255,255,.96); color:var(--ink);}
+  .spinner{width:52px; height:52px; border-radius:50%;
+           border:5px solid var(--line); border-top-color:var(--bar);
+           animation:spin 0.9s linear infinite; margin-bottom:22px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  /* 撰寫原則8：reduced-motion 不可完全靜止（會被誤判為當機），改用不涉位移的淡入淡出 */
+  @keyframes fade{0%,100%{opacity:1;} 50%{opacity:.25;}}
+  @media (prefers-reduced-motion:reduce){
+    .spinner{animation:fade 1.4s ease-in-out infinite; border-top-color:var(--bar);}
+  }
+
+  #scr-success{background:var(--ok); color:#fff;}
+  #scr-error{background:var(--bad); color:#fff;}
+  .mark{font-size:64px; line-height:1; margin-bottom:14px;}
+  .ok-name{margin-top:20px; font-size:26px; font-weight:800;
+           background:rgba(255,255,255,.18); border-radius:14px; padding:14px 26px;}
+  .ok-tip{margin-top:20px; font-size:17px; line-height:1.5;}
+  .ok-tip .id{display:block; font-size:14px; opacity:.9; margin-top:2px;}
+
+  /* 失敗畫面：後端原文照顯示（方案B），印尼文固定一句 */
+  #srv-msg{margin-top:16px; background:rgba(255,255,255,.16); border-radius:12px;
+           padding:14px 18px; max-width:340px; font-size:17px; font-weight:600;
+           line-height:1.45; word-break:break-all;}
+  #srv-id{display:block; font-size:13px; font-weight:400; opacity:.9; margin-top:6px;}
+
+  #stage-tag{margin-top:26px; font-size:12px; color:var(--sub);}
+</style>
+</head>
+<body>
+
+<!-- ══ B 選擇畫面 ══ -->
+<div class="screen" id="scr-pick">
+  <div class="head">
+    <div class="zh">員工註冊</div>
+    <div class="id">Pendaftaran Karyawan</div>
+  </div>
+  <div class="lead">
+    <div class="zh">請從名單中選擇你自己</div>
+    <div class="id">Pilih nama Anda dari daftar</div>
+  </div>
+  <div class="card">
+    <div class="flabel">員工姓名<span class="id">Nama Karyawan</span></div>
+    <select id="pick" onchange="onPick()">
+      <option value="">— 請選擇 / Pilih —</option>
+    </select>
+  </div>
+  <button class="btn btn-blue" id="btn-send" disabled onclick="toConfirm()">送出
+    <span class="id">Kirim</span></button>
+  <div class="foot">
+    註冊後如需更改，請洽管理員<br>
+    Jika perlu diubah, hubungi admin
+  </div>
+</div>
+
+<!-- ══ C 確認畫面 ══ -->
+<div class="screen" id="scr-confirm">
+  <div class="head">
+    <div class="zh">請確認</div>
+    <div class="id">Mohon konfirmasi</div>
+  </div>
+  <div class="lead">
+    <div class="zh">你是這一位嗎？</div>
+    <div class="id">Apakah ini Anda?</div>
+  </div>
+  <div class="who" id="who-box"></div>
+  <div class="lead">
+    <div class="zh">確認後將綁定你的 LINE 帳號</div>
+    <div class="id">Akun LINE Anda akan dihubungkan</div>
+  </div>
+  <button class="btn btn-blue" onclick="doRegister()">確定送出
+    <span class="id">Ya, kirim</span></button>
+  <button class="btn btn-ghost" onclick="show('scr-pick')">返回修改
+    <span class="id">Kembali</span></button>
+</div>
+
+<!-- ══ G 名單為空 ══ -->
+<div class="screen" id="scr-empty">
+  <div class="head" style="margin-top:18vh">
+    <div class="mark" style="font-size:56px; color:var(--sub)">—</div>
+    <div class="zh" style="font-size:20px; margin-top:10px">目前沒有可註冊的名單</div>
+    <div class="id" style="margin-top:4px">Saat ini tidak ada daftar yang tersedia</div>
+  </div>
+  <div class="lead" style="margin-top:16px">
+    <div class="zh">請洽管理員</div>
+    <div class="id">Hubungi admin</div>
+  </div>
+</div>
+
+<!-- ══ A/D 處理中 ══ -->
+<div class="full active" id="scr-processing">
+  <div class="spinner"></div>
+  <div class="big-zh">處理中…</div>
+  <div class="big-id">Memproses…</div>
+  <div id="stage-tag">階段：啟動中</div>
+</div>
+
+<!-- ══ E 成功 ══ -->
+<div class="full" id="scr-success">
+  <div class="mark">✔</div>
+  <div class="big-zh">註冊完成</div>
+  <div class="big-id">Pendaftaran Berhasil</div>
+  <div class="ok-name" id="ok-name"></div>
+  <div class="ok-tip">請回 LINE 使用下方選單打卡
+    <span class="id">Kembali ke LINE, gunakan menu di bawah untuk absen</span></div>
+  <div class="foot" style="color:rgba(255,255,255,.85); margin-top:24px; padding-top:0">
+    選錯人請洽管理員<br>Jika salah pilih, hubungi admin
+  </div>
+</div>
+
+<!-- ══ F/H 失敗（含逾時，標題可切換） ══ -->
+<div class="full" id="scr-error">
+  <div class="mark">✕</div>
+  <div class="big-zh" id="err-zh">註冊失敗</div>
+  <div class="big-id" id="err-id">Pendaftaran Gagal</div>
+  <div id="srv-msg">
+    <span id="srv-zh"></span>
+    <span id="srv-id">Pendaftaran gagal, hubungi admin</span>
+  </div>
+  <button class="btn btn-white" onclick="location.reload()">重新載入
+    <span class="id" style="color:inherit">Muat ulang</span></button>
+</div>
+
+<script src="common.js?v=2"></script>
+<script>
+/* ── 狀態 ── */
+var USER_ID = null;
+var LIST    = [];
+
+function show(id){
+  var list = document.querySelectorAll('.screen,.full');
+  for(var i=0;i<list.length;i++) list[i].classList.remove('active');
+  document.getElementById(id).classList.add('active');
+}
+
+/* 失敗畫面：kind='fail' 為註冊失敗、'timeout' 為連線逾時 */
+function fail(msg, kind){
+  if(kind === 'timeout'){
+    document.getElementById('err-zh').textContent = '連線逾時';
+    document.getElementById('err-id').textContent = 'Koneksi gagal';
+    document.getElementById('srv-id').textContent = 'Periksa koneksi internet, lalu buka kembali';
+  } else {
+    document.getElementById('err-zh').textContent = '註冊失敗';
+    document.getElementById('err-id').textContent = 'Pendaftaran Gagal';
+    document.getElementById('srv-id').textContent = 'Pendaftaran gagal, hubungi admin';
+  }
+  document.getElementById('srv-zh').textContent = msg || '';
+  show('scr-error');
+}
+
+/* ── 階段追蹤（除錯用；上線前移除） ── */
+var STAGE = 'A-啟動';
+function setStage(s){
+  STAGE = s;
+  var el = document.getElementById('stage-tag');
+  if(el) el.textContent = '階段：' + s;
+}
+
+/* ── 進入點：取 userId → 讀名單 ── */
+(function init(){
+  setStage('B-取得身分');
+  initLiffAndGetUserId()
+    .then(function(uid){
+      USER_ID = uid;
+      loadUnbound();
+    })
+    .catch(function(e){
+      fail((e && e.message ? e.message : '') + '（卡在 ' + STAGE + '）', 'timeout');
+    });
+})();
+
+/* ── 讀取可註冊名單（action=unbound；不需 userId） ── */
+function loadUnbound(){
+  setStage('C-讀取名單');
+  apiGet('unbound')
+    .then(function(d){
+      if(!d.ok){ fail(d.msg || '讀取名單失敗'); return; }
+      LIST = d.list || [];
+      if(LIST.length === 0){ show('scr-empty'); return; }
+      renderList();
+      show('scr-pick');
+    })
+    .catch(function(e){
+      fail(e && e.message ? e.message : '讀取名單失敗', 'timeout');
+    });
+}
+
+function renderList(){
+  var sel = document.getElementById('pick');
+  sel.innerHTML = '<option value="">— 請選擇 / Pilih —</option>';
+  LIST.forEach(function(e){
+    var o = document.createElement('option');
+    o.value = e.empId;
+    o.textContent = e.empId + '　' + e.name;
+    sel.appendChild(o);
+  });
+  document.getElementById('btn-send').disabled = true;
+}
+
+function onPick(){
+  var sel = document.getElementById('pick');
+  document.getElementById('btn-send').disabled = !sel.value;
+}
+
+function pickedText(){
+  var sel = document.getElementById('pick');
+  return sel.options[sel.selectedIndex].textContent;
+}
+function pickedId(){
+  return document.getElementById('pick').value;
+}
+
+function toConfirm(){
+  document.getElementById('who-box').textContent = pickedText();
+  show('scr-confirm');
+}
+
+/* ── ★ 第3段佔位：尚未接 action=register ★ ── */
+function doRegister(){
+  fail('【第3段測試】尚未實作寫入。選到的是：' + pickedId() + ' ' + pickedText());
+}
+</script>
+</body>
+</html>
