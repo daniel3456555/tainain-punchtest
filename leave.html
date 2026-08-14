@@ -235,7 +235,7 @@ textarea{min-height:92px;resize:vertical;}
     <div class="x-mark">✕</div>
     <div class="msg" id="rej-msg"></div>
     <div class="sub" id="rej-sub" style="color:var(--red);"></div>
-    <button class="btn ghost" onclick="show('s-form')" data-t="CONFIRM_BACK"></button>
+    <button class="btn ghost" id="rejBack" onclick="show('s-form')" data-t="CONFIRM_BACK"></button>
   </section>
 
   <!-- 兜底：資料極可能已寫入，故不呈現為「失敗」，且不提供重送按鈕 -->
@@ -247,6 +247,7 @@ textarea{min-height:92px;resize:vertical;}
 
 </div>
 
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="common.js?v=2"></script>
 <script>
 /* ==================================================================
@@ -543,6 +544,7 @@ function getRequestId(sig){
 function clearRequestId(){ try{ localStorage.removeItem(RID_STORE); }catch(e){} }
 
 async function submitLeave(){
+  if(!USERID){ showReject({ code:'NO_USERID' }); return; }   // 前端最後防線
   var f   = currentForm();
   var sig = [USERID, f.start, f.end, f.period, f.reason].join('|');
   var rid = getRequestId(sig);
@@ -609,6 +611,8 @@ function showReject(res){
   var msg  = (code && I18N[LANG][code]) ? t(code) : ((res && res.msg) || t('FALLBACK'));
   document.getElementById('rej-msg').textContent = msg;
   document.getElementById('rej-sub').textContent = t('FALLBACK');
+  // 未取得身分時不給「返回修改」：回到表單也無法送出，只會誤導
+  document.getElementById('rejBack').style.display = USERID ? '' : 'none';
   show('s-reject');
 }
 
@@ -630,7 +634,8 @@ async function routeAfterBoot(){
     show('s-form');
   }catch(err){
     document.getElementById('rej-msg').textContent = t('E_INIT');
-    document.getElementById('rej-sub').textContent = t('FALLBACK');
+    document.getElementById('rej-sub').textContent = (err && err.message) ? err.message : t('FALLBACK');
+    document.getElementById('rejBack').style.display = 'none';
     show('s-reject');
   }
 }
