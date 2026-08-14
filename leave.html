@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>請假申請 / Pengajuan Cuti</title>
+<style>
+:root{
+  --blue:#2563eb;  --blue-dark:#1d4ed8;  --blue-light:#eff6ff;
+  --green:#16a34a; --green-light:#f0fdf4;
+  --red:#dc2626;   --red-light:#fef2f2;
+  --gray-900:#111827; --gray-600:#4b5563; --gray-400:#9ca3af;
+  --gray-200:#e5e7eb; --gray-100:#f3f4f6; --gray-50:#f9fafb;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:-apple-system,"Noto Sans TC","Helvetica Neue",Arial,sans-serif;
+  background:var(--gray-100);color:var(--gray-900);line-height:1.5;font-size:16px;}
+.wrap{max-width:480px;margin:0 auto;min-height:100vh;background:#fff;}
+
+.screen{display:none;padding:20px 18px 40px;}
+.screen.on{display:block;}
+.screen.full{min-height:100vh;display:none;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;}
+.screen.full.on{display:flex;}
+
+#s-lang{background:var(--blue-light);}
+.lang-title{font-size:20px;font-weight:700;}
+.lang-title .sub2{display:block;font-size:16px;color:var(--blue-dark);margin-top:4px;font-weight:600;}
+.lang-btns{margin-top:32px;width:100%;max-width:300px;}
+.lang-btn{display:block;width:100%;padding:22px;margin-bottom:14px;border:2px solid var(--blue);
+  border-radius:14px;background:#fff;color:var(--blue-dark);
+  font-family:inherit;font-size:21px;font-weight:700;cursor:pointer;}
+.lang-btn:active{background:var(--blue-light);}
+
+.top-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.page-title{font-size:23px;font-weight:700;line-height:1.3;}
+.lang-switch{flex:0 0 auto;padding:7px 11px;border:1px solid var(--gray-200);border-radius:8px;
+  background:#fff;font-family:inherit;font-size:12px;color:var(--gray-600);cursor:pointer;
+  white-space:nowrap;margin-top:3px;}
+.who{margin-top:12px;padding:11px 14px;background:var(--blue-light);
+  border-radius:10px;font-size:18px;font-weight:600;color:var(--blue-dark);}
+
+.block{margin-top:22px;}
+.label{font-size:15px;font-weight:700;color:var(--gray-600);margin-bottom:8px;}
+.hint{font-size:13px;color:var(--gray-400);margin-top:6px;line-height:1.45;}
+
+.info-box{margin-top:16px;border:1px solid var(--gray-200);border-radius:10px;overflow:hidden;}
+.info-head{padding:13px 14px;background:var(--gray-50);cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:15px;font-weight:600;color:var(--gray-600);}
+.caret{transition:transform .2s;font-size:12px;color:var(--gray-400);}
+.info-box.open .caret{transform:rotate(180deg);}
+.info-body{display:none;padding:4px 14px 14px;}
+.info-box.open .info-body{display:block;}
+.info-body table{width:100%;border-collapse:collapse;font-size:14px;}
+.info-body td{padding:8px 4px;border-bottom:1px solid var(--gray-100);vertical-align:top;}
+.info-body td:first-child{width:44%;font-weight:600;}
+.info-note{font-size:12px;color:var(--gray-400);margin-top:10px;line-height:1.5;}
+
+input[type=date],textarea{width:100%;padding:13px;font-size:16px;font-family:inherit;
+  border:1.5px solid var(--gray-200);border-radius:10px;background:#fff;color:var(--gray-900);}
+input[type=date]:focus,textarea:focus{outline:none;border-color:var(--blue);}
+textarea{min-height:92px;resize:vertical;}
+.date-row{display:flex;align-items:center;gap:8px;}
+.date-row input{flex:1;min-width:0;}
+.tilde{color:var(--gray-400);font-size:18px;flex:0 0 auto;}
+
+.period-row{display:flex;gap:8px;}
+.period-btn{flex:1;padding:16px 4px;border:1.5px solid var(--gray-200);border-radius:10px;
+  background:#fff;font-family:inherit;font-size:16px;font-weight:600;
+  color:var(--gray-600);cursor:pointer;text-align:center;}
+.period-btn.sel{border-color:var(--blue);background:var(--blue-light);color:var(--blue-dark);}
+
+.btn{display:block;width:100%;padding:17px;margin-top:24px;border:none;border-radius:12px;
+  background:var(--blue);color:#fff;font-family:inherit;font-size:18px;font-weight:700;cursor:pointer;}
+.btn:active{background:var(--blue-dark);}
+.btn:disabled{background:var(--gray-400);cursor:not-allowed;}
+.btn.ghost{background:#fff;color:var(--gray-600);border:1.5px solid var(--gray-200);margin-top:10px;}
+
+.err{display:none;margin-top:14px;padding:13px 14px;border-radius:10px;
+  background:var(--red-light);border:1px solid #fecaca;color:var(--red);
+  font-size:15px;font-weight:600;}
+.err.on{display:block;}
+
+.confirm-title{font-size:21px;font-weight:700;text-align:center;}
+.bigbox{margin-top:18px;padding:24px 18px;border:2.5px solid var(--blue);
+  border-radius:14px;background:var(--blue-light);text-align:center;}
+.bigbox .bb-name{font-size:21px;font-weight:700;}
+.bigbox .bb-date{font-size:28px;font-weight:800;color:var(--blue-dark);margin-top:10px;letter-spacing:-.5px;}
+.bigbox .bb-days{font-size:15px;color:var(--blue-dark);margin-top:4px;opacity:.85;}
+.bigbox .bb-period{display:inline-block;margin-top:13px;padding:6px 18px;border-radius:999px;
+  background:var(--blue);color:#fff;font-size:16px;font-weight:700;}
+.reason-box{margin-top:14px;padding:14px;border:1px solid var(--gray-200);
+  border-radius:10px;background:var(--gray-50);}
+.reason-box .rb-label{font-size:13px;font-weight:700;color:var(--gray-400);margin-bottom:6px;}
+.reason-box .rb-text{font-size:16px;white-space:pre-wrap;word-break:break-word;}
+
+.spin{width:44px;height:44px;border:4px solid var(--gray-200);border-top-color:var(--blue);
+  border-radius:50%;animation:rot .9s linear infinite;}
+@keyframes rot{to{transform:rotate(360deg);}}
+@keyframes fade{0%,100%{opacity:1;}50%{opacity:.25;}}
+@media (prefers-reduced-motion:reduce){
+  /* 不可用 animation:none —— 完全靜止會被員工誤判為當機 */
+  .spin{border-color:var(--blue);border-top-color:var(--blue);
+        animation:fade 1.3s ease-in-out infinite;}
+  .caret{transition:none;}
+}
+.full .msg{margin-top:22px;font-size:21px;font-weight:700;}
+.full .sub{margin-top:14px;font-size:15px;color:var(--gray-600);line-height:1.6;max-width:310px;}
+.full .btn{max-width:300px;}
+
+#s-success{background:var(--green-light);}
+.ok-mark{font-size:58px;color:var(--green);line-height:1;}
+#s-success .msg{color:var(--green);}
+.summary{margin-top:20px;padding:19px 24px;background:#fff;border-radius:14px;
+  border:1px solid #bbf7d0;text-align:center;min-width:260px;}
+.summary .s-date{font-size:23px;font-weight:800;}
+.summary .s-meta{font-size:15px;color:var(--gray-600);margin-top:6px;}
+
+#s-reject{background:var(--red-light);}
+.x-mark{font-size:54px;color:var(--red);line-height:1;}
+#s-reject .msg{color:var(--red);}
+
+#s-pending{background:var(--blue-light);}
+.q-mark{font-size:54px;color:var(--blue);line-height:1;}
+#s-pending .msg{color:var(--blue-dark);}
+#s-need-register{background:var(--blue-light);}
+
+/* 階段追蹤（除錯用，上線前移除） */
+.stage{margin-top:18px;font-size:12px;color:var(--gray-400);font-family:monospace;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 語言選擇（唯一雙語畫面；載入身分的同時讓使用者先選語言） -->
+  <section id="s-lang" class="screen full on">
+    <div class="lang-title">請選擇語言<span class="sub2">Pilih Bahasa</span></div>
+    <div class="lang-btns">
+      <button class="lang-btn" onclick="setLang('zh')">中文</button>
+      <button class="lang-btn" onclick="setLang('id')">Bahasa Indonesia</button>
+    </div>
+  </section>
+
+  <section id="s-loading" class="screen full">
+    <div class="spin"></div>
+    <div class="msg" data-t="PROCESSING"></div>
+    <div class="stage" id="stage1"></div>
+  </section>
+
+  <section id="s-need-register" class="screen full">
+    <div class="q-mark">👤</div>
+    <div class="msg" data-t="NR_TITLE"></div>
+    <div class="sub" data-t="NR_BODY"></div>
+    <button class="btn" data-t="NR_BTN" onclick="location.href='register.html'"></button>
+  </section>
+
+  <section id="s-form" class="screen">
+    <div class="top-bar">
+      <h1 class="page-title" data-t="TITLE"></h1>
+      <button class="lang-switch" onclick="show('s-lang')" data-t="SWITCH"></button>
+    </div>
+    <div class="who" id="who-name"></div>
+
+    <div class="info-box" id="infoBox">
+      <div class="info-head" onclick="document.getElementById('infoBox').classList.toggle('open')">
+        <span data-t="INFO_HEAD"></span><span class="caret">▼</span>
+      </div>
+      <div class="info-body">
+        <table id="infoTable"></table>
+        <div class="info-note" data-t="INFO_NOTE"></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="label" data-t="DATE_LABEL"></div>
+      <div class="date-row">
+        <input type="date" id="d-start"><span class="tilde">〜</span><input type="date" id="d-end">
+      </div>
+      <div class="hint" data-t="DATE_HINT"></div>
+    </div>
+
+    <div class="block">
+      <div class="label" data-t="PERIOD_LABEL"></div>
+      <div class="period-row">
+        <button class="period-btn sel" data-p="全天" data-t="P_FULL" onclick="pickPeriod(this)"></button>
+        <button class="period-btn"     data-p="上午" data-t="P_AM"   onclick="pickPeriod(this)"></button>
+        <button class="period-btn"     data-p="下午" data-t="P_PM"   onclick="pickPeriod(this)"></button>
+      </div>
+      <div class="hint" data-t="PERIOD_HINT"></div>
+    </div>
+
+    <div class="block">
+      <div class="label" data-t="REASON_LABEL"></div>
+      <textarea id="t-reason"></textarea>
+    </div>
+
+    <div class="err" id="formErr"></div>
+    <button class="btn" id="btnSubmit" onclick="goConfirm()" data-t="SUBMIT"></button>
+  </section>
+
+  <section id="s-confirm" class="screen">
+    <div class="confirm-title" data-t="CONFIRM_TITLE"></div>
+    <div class="bigbox">
+      <div class="bb-name"   id="c-name"></div>
+      <div class="bb-date"   id="c-date"></div>
+      <div class="bb-days"   id="c-days"></div>
+      <div class="bb-period" id="c-period"></div>
+    </div>
+    <div class="reason-box">
+      <div class="rb-label" data-t="REASON_SHORT"></div>
+      <div class="rb-text" id="c-reason"></div>
+    </div>
+    <button class="btn" id="btnYes" onclick="submitLeave()" data-t="CONFIRM_YES"></button>
+    <button class="btn ghost" onclick="show('s-form')" data-t="CONFIRM_BACK"></button>
+  </section>
+
+  <section id="s-sending" class="screen full">
+    <div class="spin"></div>
+    <div class="msg" data-t="SENDING"></div>
+    <div class="sub" id="sendNote"></div>
+    <div class="stage" id="stage2"></div>
+  </section>
+
+  <section id="s-success" class="screen full">
+    <div class="ok-mark">✔</div>
+    <div class="msg" data-t="OK_TITLE"></div>
+    <div class="summary">
+      <div class="s-date" id="ok-date"></div>
+      <div class="s-meta" id="ok-meta"></div>
+    </div>
+  </section>
+
+  <section id="s-reject" class="screen full">
+    <div class="x-mark">✕</div>
+    <div class="msg" id="rej-msg"></div>
+    <div class="sub" id="rej-sub" style="color:var(--red);"></div>
+    <button class="btn ghost" onclick="show('s-form')" data-t="CONFIRM_BACK"></button>
+  </section>
+
+  <!-- 兜底：資料極可能已寫入，故不呈現為「失敗」，且不提供重送按鈕 -->
+  <section id="s-pending" class="screen full">
+    <div class="q-mark">🕓</div>
+    <div class="msg" data-t="PEND_TITLE"></div>
+    <div class="sub" data-t="PEND_BODY"></div>
+  </section>
+
+</div>
+
+<script src="common.js?v=2"></script>
+<script>
+/* ==================================================================
+   請假頁 leave.html  v1  2026/08/13
+   LIFF ID: 2010688930-aRI5hLPO
+
+   本頁自帶 apiPost / apiGetX / I18N，不依賴 common.js 的 apiGet，
+   故 common.js 未修改、?v= 維持 2。
+   只使用 common.js 的：API_BASE、initLiffAndGetUserId()
+
+   ★ 上線前移除：階段追蹤（.stage 與 setStage）、?debug=1 診斷模式
+================================================================== */
+
+/* ---------- 文案總表：新增語種只需在此加一組 ---------- */
+var I18N = {
+  zh: {
+    TITLE:"請假申請",  SWITCH:"Bahasa",
+    INFO_HEAD:"假別說明",
+    INFO_NOTE:"※ 本表僅供參考，不需在此選擇假別；請於下方原因欄說明。",
+    DATE_LABEL:"請假日期",
+    DATE_HINT:"單日請假：起訖日選同一天。最多 30 天。",
+    PERIOD_LABEL:"時段", P_FULL:"全天", P_AM:"上午", P_PM:"下午",
+    PERIOD_HINT:"多天請假時，時段套用至每一天。",
+    REASON_LABEL:"原因（必填）", REASON_PH:"請輸入請假原因", REASON_SHORT:"原因",
+    SUBMIT:"送出",
+    CONFIRM_TITLE:"請確認", CONFIRM_YES:"確定送出", CONFIRM_BACK:"返回修改",
+    DAYS:"共 {n} 天",
+    PROCESSING:"處理中…", SENDING:"送出中…",
+    WAIT:"請稍候，請勿關閉此頁面。",
+    WAIT_LONG:"正在寫入 {n} 天，需要一點時間，請勿關閉此頁面。",
+    OK_TITLE:"已送出，已通知管理員",
+    PEND_TITLE:"申請已送出，系統確認中",
+    PEND_BODY:"請勿重複送出。稍後可至「本月出勤」查看是否已登記。",
+    NR_TITLE:"尚未註冊", NR_BODY:"請先完成註冊，才能使用請假功能。", NR_BTN:"前往註冊",
+    E_PICK_DATE:"請選擇請假日期",
+    E_INIT:"無法取得身分，請關閉後重新開啟",
+    DATE_PAST:"僅可選今日以後的日期",
+    END_BEFORE_START:"迄日不可早於起日",
+    TOO_MANY_DAYS:"請假天數超過 30 天，請洽管理員",
+    REASON_REQUIRED:"請輸入請假原因",
+    BAD_PERIOD:"時段錯誤", BAD_DATE:"日期格式錯誤",
+    NOT_REGISTERED:"查無此員工，請先註冊",
+    NOT_ACTIVE:"非在職狀態，無法請假",
+    NO_USERID:"無法取得身分，請關閉後重新開啟",
+    BUSY:"系統忙碌中，請稍候再查看",
+    FALLBACK:"送出失敗，請洽管理員",
+    INFO:[
+      ["特別休假","年資滿半年起，依年資給假"],
+      ["病假","未住院每年 30 日內"],
+      ["事假","每年 14 日內，不給薪"],
+      ["婚假","8 日"],
+      ["喪假","依親等 3〜8 日"],
+      ["生理假","每月 1 日"],
+      ["公傷病假","職業災害醫療期間"],
+      ["家庭照顧假","併入事假計算"]
+    ]
+  },
+  id: {
+    TITLE:"Pengajuan Cuti",  SWITCH:"中文",
+    INFO_HEAD:"Info Jenis Cuti",
+    INFO_NOTE:"※ Hanya sebagai referensi. Tidak perlu pilih di sini. Tulis alasan di kolom bawah.",
+    DATE_LABEL:"Tanggal Cuti",
+    DATE_HINT:"Cuti 1 hari: pilih tanggal yang sama. Maksimal 30 hari.",
+    PERIOD_LABEL:"Waktu", P_FULL:"Sehari Penuh", P_AM:"Pagi", P_PM:"Siang",
+    PERIOD_HINT:"Berlaku untuk setiap hari.",
+    REASON_LABEL:"Alasan (wajib diisi)", REASON_PH:"Tulis alasan cuti", REASON_SHORT:"Alasan",
+    SUBMIT:"Kirim",
+    CONFIRM_TITLE:"Mohon konfirmasi", CONFIRM_YES:"Ya, Kirim", CONFIRM_BACK:"Kembali",
+    DAYS:"Total {n} hari",
+    PROCESSING:"Memproses…", SENDING:"Mengirim…",
+    WAIT:"Mohon tunggu, jangan tutup halaman ini.",
+    WAIT_LONG:"Sedang menyimpan {n} hari. Mohon tunggu, jangan tutup halaman ini.",
+    OK_TITLE:"Sudah terkirim ke admin",
+    PEND_TITLE:"Pengajuan terkirim, sedang diproses",
+    PEND_BODY:'Jangan kirim ulang. Cek di menu "Absensi Bulan Ini".',
+    NR_TITLE:"Belum Terdaftar", NR_BODY:"Daftar dulu sebelum bisa mengajukan cuti.", NR_BTN:"Daftar Sekarang",
+    E_PICK_DATE:"Pilih tanggal cuti",
+    E_INIT:"Gagal memuat data. Tutup dan buka lagi.",
+    DATE_PAST:"Hanya bisa pilih mulai hari ini",
+    END_BEFORE_START:"Tanggal selesai tidak boleh sebelum tanggal mulai",
+    TOO_MANY_DAYS:"Maksimal 30 hari. Hubungi admin.",
+    REASON_REQUIRED:"Wajib isi alasan cuti",
+    BAD_PERIOD:"Pilihan waktu salah", BAD_DATE:"Format tanggal salah",
+    NOT_REGISTERED:"Belum terdaftar. Daftar dulu.",
+    NOT_ACTIVE:"Akun tidak aktif. Hubungi admin.",
+    NO_USERID:"Gagal memuat data. Tutup dan buka lagi.",
+    BUSY:"Sistem sedang sibuk. Cek lagi nanti.",
+    FALLBACK:"Gagal mengirim. Hubungi admin.",
+    INFO:[
+      ["Cuti Tahunan","Setelah kerja 6 bulan, sesuai masa kerja"],
+      ["Cuti Sakit","Maks. 30 hari per tahun (tanpa rawat inap)"],
+      ["Izin Pribadi","Maks. 14 hari per tahun, tanpa gaji"],
+      ["Cuti Menikah","8 hari"],
+      ["Cuti Duka","3–8 hari, tergantung hubungan keluarga"],
+      ["Cuti Haid","1 hari per bulan"],
+      ["Cuti Kecelakaan Kerja","Selama masa pengobatan"],
+      ["Cuti Merawat Keluarga","Dihitung bersama izin pribadi"]
+    ]
+  }
+};
+
+/* ---------- 常數 ----------
+   ⚠️ 不可宣告 API_BASE / API_TIMEOUT_MS / INIT_TIMEOUT_MS / LIFF_IDS，
+      這些是 common.js 的 const，重複宣告會拋 SyntaxError，整頁 JS 停擺。 */
+var GET_TIMEOUT_MS   = 15000;   // GET 單次逾時
+var POST_TIMEOUT_MS  = 45000;   // POST 單次逾時（實測曾出現 33 秒）
+var RETRY_MAX        = 3;       // 含首次，共 3 次
+var RETRY_BACKOFF    = [800, 1600];
+var RID_STORE        = 'leaveReq';
+
+/* ---------- 狀態 ---------- */
+var LANG = 'zh';
+var NAME = '', USERID = '', period = '全天';
+var bootPromise = null, bootResult = null, langChosen = false;
+
+function t(k){ return I18N[LANG][k]; }
+function setStage(s){
+  var a=document.getElementById('stage1'), b=document.getElementById('stage2');
+  if(a) a.textContent='階段：'+s;
+  if(b) b.textContent='階段：'+s;
+}
+function show(id){
+  var all=document.querySelectorAll('.screen');
+  for(var i=0;i<all.length;i++) all[i].classList.remove('on');
+  document.getElementById(id).classList.add('on');
+  window.scrollTo(0,0);
+}
+function applyLang(){
+  var els=document.querySelectorAll('[data-t]');
+  for(var i=0;i<els.length;i++) els[i].textContent=t(els[i].getAttribute('data-t'));
+  document.getElementById('t-reason').placeholder=t('REASON_PH');
+  var rows=t('INFO'), html='';
+  for(var j=0;j<rows.length;j++) html+='<tr><td>'+rows[j][0]+'</td><td>'+rows[j][1]+'</td></tr>';
+  document.getElementById('infoTable').innerHTML=html;
+  document.getElementById('sendNote').textContent=t('WAIT');
+}
+
+/* ==================== 通訊層 ==================== */
+
+function sleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+
+/* 帶逾時的 fetch（AbortController 真正中止，避免殘留連線） */
+function fetchTimeout(url, opts, ms){
+  var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  if(ctrl) opts.signal = ctrl.signal;
+  return Promise.race([
+    fetch(url, opts),
+    new Promise(function(_,rej){
+      setTimeout(function(){ if(ctrl) ctrl.abort(); rej(new Error('TIMEOUT')); }, ms);
+    })
+  ]);
+}
+
+/* 判斷是否為轉址 404（回傳 HTML 而非 JSON）
+   ★ 必須用 text() 檢查 '<' 開頭，不可用 json() 失敗與否判定，
+     否則會把業務邏輯拒絕也一起重試 */
+function parseOrThrow(text){
+  if(!text || text.charAt(0)==='<') throw new Error('REDIRECT_404');
+  return JSON.parse(text);
+}
+
+/* GET（本頁自用，含重試；不動 common.js 的 apiGet） */
+async function apiGetX(action, params){
+  var qs = new URLSearchParams(params||{});
+  qs.set('action', action);
+  var url = API_BASE + '?' + qs.toString();
+  for(var i=0;i<RETRY_MAX;i++){
+    try{
+      var res  = await fetchTimeout(url, {method:'GET'}, GET_TIMEOUT_MS);
+      var text = await res.text();
+      return parseOrThrow(text);
+    }catch(err){
+      if(i===RETRY_MAX-1) throw err;
+      await sleep(RETRY_BACKOFF[i]);
+    }
+  }
+}
+
+/* POST（冪等鍵 ＋ 重試）
+   ★ 不可加 Content-Type header：URLSearchParams 會自動帶正確值；
+     手動加會觸發 OPTIONS 預檢，而 Apps Script 不處理 OPTIONS */
+async function apiPost(params, onAttempt){
+  var lastErr = null;
+  for(var i=0;i<RETRY_MAX;i++){
+    if(onAttempt) onAttempt(i+1);
+    try{
+      var res  = await fetchTimeout(API_BASE,
+                   {method:'POST', body:new URLSearchParams(params)}, POST_TIMEOUT_MS);
+      var text = await res.text();
+      return parseOrThrow(text);
+    }catch(err){
+      lastErr = err;
+      if(i===RETRY_MAX-1) break;
+      await sleep(RETRY_BACKOFF[i]);
+    }
+  }
+  throw lastErr;
+}
+
+/* ==================== 身分取得 ==================== */
+
+/* 身分取得沿用 common.js 的 initLiffAndGetUserId()：
+   已含 8 秒逾時、?debug=1 診斷模式、SDK 檢查，
+   且已於 punch.html / register.html 手機實測通過。
+   本頁不自行實作 liff.init，避免引入未驗證的路徑。 */
+async function boot(){
+  setStage('A-取得身分');
+  USERID = await initLiffAndGetUserId();
+  setStage('W-查詢身分');
+  return await apiGetX('whoami', { userId: USERID });
+}
+
+/* ==================== 表單 ==================== */
+
+function pickPeriod(btn){
+  var bs=document.querySelectorAll('.period-btn');
+  for(var i=0;i<bs.length;i++) bs[i].classList.remove('sel');
+  btn.classList.add('sel');
+  period=btn.getAttribute('data-p');
+}
+
+/* 日期一律字串處理，不經過 new Date()（"2026-08-20" 會被當 UTC，台灣時區倒退一天） */
+function todayStr(){
+  var d=new Date(), m=('0'+(d.getMonth()+1)).slice(-2), dd=('0'+d.getDate()).slice(-2);
+  return d.getFullYear()+'-'+m+'-'+dd;
+}
+function toSlash(v){ return v.replace(/-/g,'/'); }
+function daysBetween(a,b){
+  var pa=a.split('-'), pb=b.split('-');
+  return Math.round((Date.UTC(+pb[0],+pb[1]-1,+pb[2])-Date.UTC(+pa[0],+pa[1]-1,+pa[2]))/86400000)+1;
+}
+function showErr(key){
+  var e=document.getElementById('formErr');
+  e.textContent=t(key); e.classList.add('on');
+}
+
+/* 前端驗證四條（規格書 6-2a〜6-2d）；後端仍會再驗一次 */
+function validate(){
+  var s=document.getElementById('d-start').value;
+  var e=document.getElementById('d-end').value;
+  var r=document.getElementById('t-reason').value.trim();
+  if(!s||!e)              return 'E_PICK_DATE';
+  if(s<todayStr())        return 'DATE_PAST';
+  if(e<s)                 return 'END_BEFORE_START';
+  if(daysBetween(s,e)>30) return 'TOO_MANY_DAYS';
+  if(!r)                  return 'REASON_REQUIRED';
+  return null;
+}
+
+function currentForm(){
+  var s=document.getElementById('d-start').value;
+  var e=document.getElementById('d-end').value;
+  return {
+    start: toSlash(s), end: toSlash(e), period: period,
+    reason: document.getElementById('t-reason').value.trim(),
+    days: daysBetween(s,e)
+  };
+}
+
+function goConfirm(){
+  document.getElementById('formErr').classList.remove('on');
+  var bad=validate();
+  if(bad){ showErr(bad); return; }
+
+  var f=currentForm();
+  var pKey={'全天':'P_FULL','上午':'P_AM','下午':'P_PM'}[f.period];
+  var dateText=(f.start===f.end)?f.start:f.start+' 〜 '+f.end;
+
+  document.getElementById('c-name').textContent   = NAME;
+  document.getElementById('c-date').textContent   = dateText;
+  document.getElementById('c-days').textContent   = t('DAYS').replace('{n}',f.days);
+  document.getElementById('c-period').textContent = t(pKey);
+  document.getElementById('c-reason').textContent = f.reason;
+  document.getElementById('sendNote').textContent =
+    (f.days>=7) ? t('WAIT_LONG').replace('{n}',f.days) : t('WAIT');
+
+  show('s-confirm');
+}
+
+/* ==================== 送出（四層防線） ==================== */
+
+/* 冪等鍵：內容相同則沿用同一把（防員工中途重整後重複送出） */
+function getRequestId(sig){
+  try{
+    var saved = JSON.parse(localStorage.getItem(RID_STORE) || 'null');
+    if(saved && saved.sig === sig) return saved.id;
+  }catch(e){}
+  var id = (window.crypto && crypto.randomUUID)
+           ? crypto.randomUUID()
+           : 'r' + Date.now() + '_' + Math.floor(Math.random()*1e9);
+  try{ localStorage.setItem(RID_STORE, JSON.stringify({sig:sig, id:id})); }catch(e){}
+  return id;
+}
+function clearRequestId(){ try{ localStorage.removeItem(RID_STORE); }catch(e){} }
+
+async function submitLeave(){
+  var f   = currentForm();
+  var sig = [USERID, f.start, f.end, f.period, f.reason].join('|');
+  var rid = getRequestId(sig);
+
+  document.getElementById('btnYes').disabled = true;   // 防連點
+  show('s-sending');
+
+  var res = null;
+  try{
+    // 【第一層】冪等鍵 ＋ 自動重試 3 次
+    res = await apiPost({
+      action:'leave', userId:USERID, requestId:rid,
+      startDate:f.start, endDate:f.end, period:f.period, reason:f.reason
+    }, function(n){ setStage('POST 第 '+n+' 次'); });
+  }catch(err){
+    // 【第二層】三次皆失敗 → 改以查詢確認資料是否已寫入
+    setStage('查詢確認中');
+    var ok = await verifyWritten(f.start);
+    document.getElementById('btnYes').disabled = false;
+    if(ok){ clearRequestId(); showSuccess(f); }
+    else  { show('s-pending'); }   // 【第三層】中性畫面，不呈現為失敗、不給重送鈕
+    return;
+  }
+
+  document.getElementById('btnYes').disabled = false;
+
+  if(res && res.ok){
+    clearRequestId();
+    showSuccess(f, res);
+  }else{
+    // 業務邏輯拒絕：明白告知，員工可自行修正
+    showReject(res);
+  }
+}
+
+/* 第二層：查該月出勤，確認起日是否已成為「請假」 */
+async function verifyWritten(startSlash){
+  try{
+    var p = startSlash.split('/');
+    var q = await apiGetX('query_data',
+              { userId:USERID, year:p[0], month:String(parseInt(p[1],10)), emp:'' });
+    if(!q || !q.ok || !q.rows) return false;
+    for(var i=0;i<q.rows.length;i++){
+      var r=q.rows[i];
+      if(String(r.date).indexOf(startSlash)>=0 && String(r.status)==='請假') return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+function showSuccess(f, res){
+  var pKey={'全天':'P_FULL','上午':'P_AM','下午':'P_PM'}[f.period];
+  // 一律優先採用後端回傳值（規格書：顯示值＝實際寫入值）
+  var s=(res&&res.start)||f.start, e=(res&&res.end)||f.end, n=(res&&res.days)||f.days;
+  document.getElementById('ok-date').textContent = (s===e)? s : s+' 〜 '+e;
+  document.getElementById('ok-meta').textContent =
+    ((res&&res.name)||NAME)+'・'+t(pKey)+'・'+t('DAYS').replace('{n}',n);
+  show('s-success');
+}
+
+function showReject(res){
+  var code = res && res.code;
+  // 代碼查得到 → 顯示該語言訊息；查不到 → 後端原文（方案B，同 register.html）
+  var msg  = (code && I18N[LANG][code]) ? t(code) : ((res && res.msg) || t('FALLBACK'));
+  document.getElementById('rej-msg').textContent = msg;
+  document.getElementById('rej-sub').textContent = t('FALLBACK');
+  show('s-reject');
+}
+
+/* ==================== 啟動 ==================== */
+
+function setLang(l){
+  LANG=l; applyLang(); langChosen=true; routeAfterBoot();
+}
+
+async function routeAfterBoot(){
+  if(!langChosen) return;
+  show('s-loading');
+  try{
+    if(bootResult === null) bootResult = await bootPromise;
+    if(bootResult.needRegister){ show('s-need-register'); return; }
+    if(!bootResult.ok){ showReject(bootResult); return; }
+    NAME = bootResult.name;
+    document.getElementById('who-name').textContent = NAME;
+    show('s-form');
+  }catch(err){
+    document.getElementById('rej-msg').textContent = t('E_INIT');
+    document.getElementById('rej-sub').textContent = t('FALLBACK');
+    show('s-reject');
+  }
+}
+
+(function(){
+  var tt=todayStr();
+  var s=document.getElementById('d-start'), e=document.getElementById('d-end');
+  s.value=tt; s.min=tt; e.value=tt; e.min=tt;
+  s.addEventListener('change',function(){
+    e.min=s.value; if(e.value<s.value) e.value=s.value;
+  });
+  applyLang();
+  bootPromise = boot();                       // 背景取身分，與選語言同時進行
+  bootPromise.catch(function(){});            // 防未捕捉錯誤警告；實際處理在 routeAfterBoot
+})();
+</script>
+</body>
+</html>
