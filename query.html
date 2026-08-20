@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>出勤查詢</title>
+<style>
+/* ===================================================================
+   出勤查詢頁 query.html
+   配色沿用 punch.html：主色藍 #2563eb ／ 成功綠 ／ 失敗紅
+   =================================================================== */
+:root{
+  --blue:#2563eb; --blue-soft:#eff6ff;
+  --green:#16a34a; --green-soft:#f0fdf4;
+  --red:#dc2626; --red-soft:#fef2f2;
+  --amber:#d97706; --amber-soft:#fffbeb;
+  --gray-soft:#f3f4f6; --gray-ink:#6b7280;
+  --ink:#1f2937; --ink-2:#4b5563; --ink-3:#9ca3af;
+  --line:#e5e7eb; --bg:#f9fafb;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","Helvetica Neue",Arial,sans-serif;
+  background:var(--bg); color:var(--ink); font-size:14px; line-height:1.5; padding-bottom:28px;
+}
+.wrap{max-width:900px;margin:0 auto;padding:0 12px}
+
+/* ---------- 頁首 ---------- */
+.page-head{padding:16px 0 10px}
+.page-title{font-size:19px;font-weight:700;line-height:1.3}
+.page-title .sub{display:block;font-size:12px;font-weight:500;color:var(--ink-3);margin-top:2px}
+
+/* ---------- 篩選列 ---------- */
+.filters{display:flex;gap:8px;margin-bottom:12px;max-width:520px}
+.field{flex:1 1 0;min-width:0}
+.field label{display:block;font-size:11px;color:var(--ink-3);margin-bottom:3px;font-weight:600}
+.field select{width:100%;padding:8px 6px;font-size:14px;
+  border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;background-size:12px;padding-right:24px}
+.field select:focus{outline:2px solid var(--blue);outline-offset:1px;border-color:var(--blue)}
+
+/* ---------- 表格 ---------- */
+.table-card{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{background:var(--gray-soft);color:var(--ink-2);font-weight:700;line-height:1.25;
+  text-align:center;border-bottom:1px solid var(--line);vertical-align:bottom;
+  font-size:12px;padding:9px 3px}
+thead th .id{display:block;font-weight:500;color:var(--ink-3);margin-top:1px;
+  font-size:10.5px;letter-spacing:-0.2px}
+thead th.tl{text-align:left}
+tbody td{border-bottom:1px solid #f3f4f6;vertical-align:middle;text-align:center;
+  font-size:15px;padding:11px 3px}
+tbody td.tl{text-align:left;word-break:break-all}
+tbody tr:last-child td{border-bottom:none}
+tbody tr.hol td{background:#fcfcfd;color:var(--ink-3)}
+/* 異常標記：僅管理員版套用（員工版不標，定案 2026/08/19） */
+tbody tr.flag td{background:var(--red-soft)}
+tbody tr.flag td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+
+/* 員工版 5 欄 */
+.mode-emp col.c-date{width:20%}
+.mode-emp col.c-week{width:12%}
+.mode-emp col.c-stat{width:28%}
+.mode-emp col.c-in{width:20%}
+.mode-emp col.c-out{width:20%}
+/* 管理員 7 欄（含備註） */
+.mode-admin thead th{font-size:11.5px;padding:8px 2px}
+.mode-admin tbody td{font-size:13.5px;padding:9px 2px}
+.mode-admin col.c-date{width:12%}
+.mode-admin col.c-week{width:7%}
+.mode-admin col.c-stat{width:12%}
+.mode-admin col.c-in{width:12%}
+.mode-admin col.c-out{width:14%}
+.mode-admin col.c-hours{width:10%}
+.mode-admin col.c-note{width:33%}
+
+/* 狀態膠囊 */
+.pill{display:inline-block;padding:1px 5px;border-radius:4px;line-height:1.4;
+  white-space:nowrap;font-size:.86em}
+.pill .id{font-size:.78em;color:inherit;opacity:.7;margin-left:2px}
+.pill-work{background:var(--blue-soft);color:#1d4ed8}
+.pill-leave{background:var(--amber-soft);color:#b45309}
+.pill-hol{background:var(--gray-soft);color:var(--gray-ink)}
+
+/* 時間與 +1 */
+.time{white-space:nowrap;font-variant-numeric:tabular-nums}
+.plus1{font-size:.75em;color:var(--blue);font-weight:700;position:relative;top:-.35em;margin-left:2px}
+.seq{color:var(--ink-3);font-size:.8em;margin-left:1px}
+.note{color:var(--ink-2);font-size:12.5px;line-height:1.4}
+
+.empty{padding:34px 12px;text-align:center;color:var(--ink-3)}
+.empty .en{display:block;font-size:12px;margin-top:3px}
+
+/* ---------- +1 註腳 ---------- */
+.footnote{margin-top:8px;padding:8px 10px;background:var(--blue-soft);border-radius:8px;
+  font-size:12px;color:#1d4ed8;line-height:1.45;max-width:640px}
+.footnote .id{display:block;color:#3b82f6;font-size:11px}
+
+/* ---------- 全員資料完整提示 ---------- */
+.allclear{margin-bottom:10px;padding:10px 12px;background:var(--green-soft);
+  border:1px solid #bbf7d0;border-radius:10px;font-size:13.5px;color:#15803d;font-weight:600}
+
+/* ---------- 可收合區塊 ---------- */
+.box{margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.box-head{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:12px;cursor:pointer;font-size:14px;font-weight:600}
+.box-head .ttl{flex:1 1 auto;min-width:0}
+.box-head .ttl .id{display:block;font-size:11px;font-weight:500;color:var(--ink-3);margin-top:1px}
+.box-head .arrow{color:var(--ink-3);font-size:12px;transition:transform .2s ease;flex:0 0 auto}
+.box.open .box-head .arrow{transform:rotate(180deg)}
+.box-body{display:none;border-top:1px solid var(--line)}
+.box.open .box-body{display:block}
+@media (prefers-reduced-motion:reduce){.box-head .arrow{transition:none}}
+
+.p-name{font-size:15.5px;font-weight:700;margin-right:8px}
+.p-meta{font-size:13px;font-weight:500;color:var(--ink-2)}
+.p-flag{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:10px;
+  background:var(--red);color:#fff;font-size:12px;font-weight:700;white-space:nowrap}
+.p-total{padding:10px 12px;background:#fafafa;border-top:1px solid var(--line);
+  font-size:13.5px;font-weight:600;color:var(--ink-2)}
+
+.nrow{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13.5px;line-height:1.45}
+.nrow:last-child{border-bottom:none}
+.nrow .dt{flex:0 0 auto;min-width:46px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.nrow .tx{flex:1 1 auto;color:var(--ink-2)}
+.pad{padding:2px 12px 8px}
+
+.leave-row{display:flex;gap:8px;padding:7px 0;font-size:13.5px;border-bottom:1px solid #f3f4f6}
+.leave-row:last-child{border-bottom:none}
+.leave-row .nm{flex:0 0 66px;font-weight:600}
+.leave-row .dd{color:var(--ink-2)}
+
+/* ---------- 小計 ---------- */
+.summary{margin-top:10px;padding:11px 12px;background:#fff;border:1px solid var(--line);
+  border-radius:10px;font-size:14px;font-weight:600;max-width:640px}
+.summary .id{display:block;font-size:11.5px;font-weight:500;color:var(--ink-3);margin-top:2px}
+
+/* ---------- 頁底固定註記 ---------- */
+.foot-note{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);
+  font-size:11.5px;color:var(--ink-3);line-height:1.5;max-width:640px}
+.foot-note .id{display:block;margin-top:3px}
+
+/* ---------- 載入 / 錯誤 / 未註冊 ---------- */
+.center-box{padding:48px 16px;text-align:center}
+.spinner{width:28px;height:28px;margin:0 auto 12px;border:3px solid var(--line);
+  border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* reduced-motion：改用淡入淡出，不可完全靜止（會被誤判當機） */
+@media (prefers-reduced-motion:reduce){
+  .spinner{animation:fade 1.2s ease-in-out infinite}
+  @keyframes fade{0%,100%{opacity:1}50%{opacity:.25}}
+}
+.center-box .msg{color:var(--ink-2);font-size:14px;line-height:1.6}
+.center-box .msg .id{display:block;color:var(--ink-3);font-size:12px;margin-top:4px}
+.center-box.err .msg{color:var(--red)}
+.btn{display:inline-block;margin-top:18px;padding:11px 26px;border:none;border-radius:8px;
+  background:var(--blue);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+/* 階段追蹤（除錯用，上線前連同 stage() 一併移除） */
+#stageInfo{margin-top:14px;font-size:11px;color:var(--ink-3);word-break:break-all}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ===== 載入中 ===== -->
+  <div id="scLoading" class="center-box">
+    <div class="spinner"></div>
+    <div class="msg">載入中…<span class="id">Memuat…</span></div>
+    <div id="stageInfo"></div>
+  </div>
+
+  <!-- ===== 錯誤 ===== -->
+  <div id="scError" class="center-box err hidden">
+    <div class="msg" id="errMsg"></div>
+    <button class="btn" onclick="location.reload()">重新載入 / Muat ulang</button>
+    <div id="stageInfo2"></div>
+  </div>
+
+  <!-- ===== 尚未註冊 ===== -->
+  <div id="scNeedReg" class="center-box hidden">
+    <div class="msg">
+      您尚未完成註冊，請先前往註冊頁綁定
+      <span class="id">Anda belum terdaftar. Silakan daftar terlebih dahulu.</span>
+    </div>
+    <button class="btn" id="btnGoReg">前往註冊 / Daftar</button>
+  </div>
+
+  <!-- ===== 主畫面 ===== -->
+  <div id="scMain" class="hidden">
+    <div class="page-head"><div class="page-title" id="pageTitle"></div></div>
+    <div class="filters">
+      <div class="field"><label id="lbYear">年 / Tahun</label><select id="selYear"></select></div>
+      <div class="field"><label id="lbMonth">月 / Bulan</label><select id="selMonth"></select></div>
+    </div>
+    <div id="result"></div>
+    <div class="foot-note" id="footNote"></div>
+  </div>
+
+</div>
+
+<!-- ⚠️ LIFF SDK 必須自行載入，common.js 不含 SDK -->
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<!-- ⚠️ common.js 每次修改，四頁的 ?v= 必須一起 +1 -->
+<script src="common.js?v=2"></script>
+
+<script>
+/* ===================================================================
+   本頁常數一律加 Q_ 前綴
+   ⚠️ 絕不可宣告與 common.js 同名的常數：
+      API_BASE / API_TIMEOUT_MS / INIT_TIMEOUT_MS / LIFF_IDS
+      撞名會讓整段 script 一行都不執行，且畫面上完全沒有錯誤訊息
+   =================================================================== */
+var Q_GET_TIMEOUT_MS   = 20000;          // 單次 GET 逾時（query_data 掃全表較慢）
+var Q_RETRY_MAX        = 3;              // 重試次數
+var Q_BACKOFF          = [800, 1600];    // 退避毫秒
+var Q_BOOT_TIMEOUT_MS  = 40000;          // 整頁啟動逾時保護
+var Q_SYSTEM_START_YEAR = 2026;          // 系統啟用年；上線前確認
+
+var Q_ME    = { empId:"", name:"", isAdmin:false };
+var Q_state = { year:0, month:0 };
+var Q_gen   = 0;                         // 世代檢查
+var Q_cache = {};                        // 管理員版延遲渲染：empId -> rows
+var Q_bootTimer = null;
+
+/* ---------- 階段追蹤（除錯用，上線前移除本函式與兩個 stageInfo 節點） ---------- */
+function stage(s){
+  var a = document.getElementById("stageInfo");
+  var b = document.getElementById("stageInfo2");
+  if(a) a.textContent = "stage: " + s;
+  if(b) b.textContent = "stage: " + s;
+}
+
+/* ===================================================================
+   畫面切換
+   =================================================================== */
+function showScreen(id){
+  ["scLoading","scError","scNeedReg","scMain"].forEach(function(k){
+    document.getElementById(k).classList.toggle("hidden", k !== id);
+  });
+}
+function fail(msg){
+  if(Q_bootTimer){ clearTimeout(Q_bootTimer); Q_bootTimer = null; }
+  document.getElementById("errMsg").innerHTML = esc(msg)
+    + "<span class=\"id\">Terjadi kesalahan. Silakan coba lagi.</span>";
+  showScreen("scError");
+}
+
+/* ===================================================================
+   網路層：GET ＋ 自動重試
+   轉址 404（約 8.3%）時後端其實已執行完畢，唯讀端點可安全無限重試。
+   ⚠️ 必須用 res.text() 檢查開頭是否為 '<'，不可用 res.json()
+   =================================================================== */
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+function fetchText(url, ms){
+  var work = fetch(url).then(function(res){ return res.text(); });
+  var to = new Promise(function(_, reject){
+    setTimeout(function(){ reject(new Error("後端無回應（逾時 " + (ms/1000) + " 秒）")); }, ms);
+  });
+  return Promise.race([work, to]);
+}
+
+async function apiGetX(action, params){
+  var p = new URLSearchParams(params || {});
+  p.set("action", action);
+  var url = API_BASE + "?" + p.toString();
+  var lastErr = null;
+
+  for(var i = 0; i < Q_RETRY_MAX; i++){
+    try{
+      var text = await fetchText(url, Q_GET_TIMEOUT_MS);
+      var t = String(text).trim();
+      if(t.charAt(0) === "<") throw new Error("後端回應為 HTML（轉址 404）");
+      return JSON.parse(t);
+    }catch(e){
+      lastErr = e;
+      if(i < Q_RETRY_MAX - 1) await sleep(Q_BACKOFF[i]);
+    }
+  }
+  throw lastErr || new Error("查詢失敗");
+}
+
+/* ===================================================================
+   工具函式
+   =================================================================== */
+function fmtTime(s){ return s ? String(s).substr(11,5) : ""; }
+function fmtDate(s){ return s ? String(s).substr(5,5) : ""; }
+function fmtDateShort(s){
+  return s ? String(Number(String(s).substr(5,2))) + "/" + String(s).substr(8,2) : "";
+}
+function fmtWeek(s){ return s ? String(s).replace("星期","") : ""; }
+function isOvernight(dateStr, outTimeStr){
+  if(!dateStr || !outTimeStr) return false;
+  return String(outTimeStr).substr(0,10) > String(dateStr).substr(0,10);
+}
+function esc(s){
+  return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+var SEQ_MARK = ["","①","②","③","④","⑤","⑥","⑦","⑧","⑨"];
+
+/* 異常判定：只認「需要處理」的三種；假日、請假、跨夜、同日多列一律不標 */
+function rowFlag(r){
+  if(r.status === "假日" || r.status === "請假") return "";
+  var hasIn = !!r.inTime, hasOut = !!r.outTime;
+  if(hasIn && !hasOut)  return "未打下班卡";
+  if(!hasIn && hasOut)  return "未打上班卡";
+  if(!hasIn && !hasOut && !r.status) return "平日未打卡";
+  return "";
+}
+
+/* 同人同日多列標序號 */
+function markSeq(rows){
+  var cnt = {};
+  rows.forEach(function(r){ var k = r.date + "_" + r.empId; cnt[k] = (cnt[k]||0) + 1; });
+  var seen = {};
+  rows.forEach(function(r){
+    var k = r.date + "_" + r.empId;
+    r._seq = (cnt[k] > 1) ? (seen[k] = (seen[k]||0) + 1) : 0;
+  });
+  return rows;
+}
+
+function calcSummary(rows){
+  var a = {}, l = {}, hrs = 0, flags = 0, over = false;
+  rows.forEach(function(r){
+    var k = r.date + "_" + r.empId;
+    if(r.status === "上班") a[k] = true;
+    if(r.status === "請假") l[k] = true;
+    if(typeof r.hours === "number") hrs += r.hours;
+    if(rowFlag(r)) flags++;
+    if(isOvernight(r.date, r.outTime)) over = true;
+  });
+  return { attend:Object.keys(a).length, leave:Object.keys(l).length,
+           hours:Math.round(hrs*100)/100, flags:flags, overnight:over };
+}
+
+/* ===================================================================
+   表格渲染（員工版與管理員版共用）
+   ⚠️ 異常底色僅管理員版套用
+   =================================================================== */
+function renderTable(rows, isAdmin){
+  var c = "<col class=\"c-date\"><col class=\"c-week\"><col class=\"c-stat\">"
+        + "<col class=\"c-in\"><col class=\"c-out\">";
+  if(isAdmin) c += "<col class=\"c-hours\"><col class=\"c-note\">";
+
+  function th(zh, id, cls){
+    var k = cls ? " class=\"" + cls + "\"" : "";
+    return isAdmin ? "<th" + k + ">" + zh + "</th>"
+                   : "<th" + k + ">" + zh + "<span class=\"id\">" + id + "</span></th>";
+  }
+  var h = th("日期","Tanggal") + th("星期","Hari") + th("狀態","Status")
+        + th("上班","Masuk") + th("下班","Pulang");
+  if(isAdmin) h += th("時數","Jam") + th("備註","Catatan","tl");
+
+  var body = "";
+  rows.forEach(function(r){
+    var over = isOvernight(r.date, r.outTime);
+    var hol  = (r.status === "假日");
+    var flag = isAdmin && rowFlag(r);     // ← 員工版不套底色
+
+    var tds = "<td class=\"time\">" + fmtDate(r.date)
+            + (r._seq ? "<span class=\"seq\">" + SEQ_MARK[r._seq] + "</span>" : "") + "</td>";
+    tds += "<td>" + fmtWeek(r.weekday) + "</td>";
+    tds += "<td>" + statusCell(r.status, isAdmin) + "</td>";
+    tds += "<td class=\"time\">" + fmtTime(r.inTime) + "</td>";
+    tds += "<td class=\"time\">" + fmtTime(r.outTime)
+         + (over ? "<span class=\"plus1\">+1</span>" : "") + "</td>";
+    if(isAdmin){
+      tds += "<td class=\"time\">" + (r.hours === "" || r.hours == null ? "" : r.hours) + "</td>";
+      tds += "<td class=\"tl\"><div class=\"note\">" + esc(r.note) + "</div></td>";
+    }
+    body += "<tr class=\"" + (hol ? "hol " : "") + (flag ? "flag" : "") + "\">" + tds + "</tr>";
+  });
+
+  return "<div class=\"table-card " + (isAdmin ? "mode-admin" : "mode-emp") + "\">"
+       + "<table><colgroup>" + c + "</colgroup><thead><tr>" + h + "</tr></thead>"
+       + "<tbody>" + body + "</tbody></table></div>";
+}
+
+function statusCell(status, isAdmin){
+  if(status === "上班"){
+    return isAdmin ? "<span class=\"pill pill-work\">上班</span>"
+      : "<span class=\"pill pill-work\">上班<span class=\"id\">Kerja</span></span>";
+  }
+  if(status === "請假"){
+    return isAdmin ? "<span class=\"pill pill-leave\">請假</span>"
+      : "<span class=\"pill pill-leave\">請假<span class=\"id\">Cuti</span></span>";
+  }
+  if(status === "假日"){
+    return isAdmin ? "<span class=\"pill pill-hol\">假日</span>"
+      : "<span class=\"pill pill-hol\">假日<span class=\"id\">Libur</span></span>";
+  }
+  return "";
+}
+
+function renderPlusFootnote(has, isAdmin){
+  if(!has) return "";
+  return isAdmin
+    ? "<div class=\"footnote\">「+1」= 隔日下班</div>"
+    : "<div class=\"footnote\">「+1」= 隔日下班"
+      + "<span class=\"id\">\"+1\" = pulang keesokan harinya</span></div>";
+}
+
+function renderEmpty(isAdmin){
+  return isAdmin
+    ? "<div class=\"table-card\"><div class=\"empty\">查無資料</div></div>"
+    : "<div class=\"table-card\"><div class=\"empty\">查無資料"
+      + "<span class=\"en\">Tidak ada data</span></div></div>";
+}
+
+/* ===================================================================
+   員工版
+   =================================================================== */
+function renderEmployeeView(rows, summary){
+  if(!rows.length) return renderEmpty(false);
+  markSeq(rows);
+
+  var s = calcSummary(rows);
+  var attend = (summary && typeof summary.attend === "number") ? summary.attend : s.attend;
+  var leave  = (summary && typeof summary.leave  === "number") ? summary.leave  : s.leave;
+
+  var html = renderTable(rows, false);
+  html += renderPlusFootnote(s.overnight, false);
+
+  /* 備註區塊：抽出、預設收合、含請假、無備註則整區塊不出現 */
+  var notes = rows.filter(function(r){ return !!r.note; });
+  if(notes.length){
+    var items = notes.map(function(r){
+      var dt = fmtDateShort(r.date)
+             + (r._seq ? "<span class=\"seq\">" + SEQ_MARK[r._seq] + "</span>" : "");
+      return "<div class=\"nrow\"><div class=\"dt\">" + dt + "</div>"
+           + "<div class=\"tx\">" + esc(r.note) + "</div></div>";
+    }).join("");
+    html += "<div class=\"box\"><div class=\"box-head\">"
+          + "<span class=\"ttl\">本月備註　" + notes.length + " 筆"
+          + "<span class=\"id\">Catatan bulan ini</span></span>"
+          + "<span class=\"arrow\">▼</span></div>"
+          + "<div class=\"box-body\"><div class=\"pad\">" + items + "</div></div></div>";
+  }
+
+  html += "<div class=\"summary\">出勤 " + attend + " 天・請假 " + leave + " 天"
+        + "<span class=\"id\">Hadir " + attend + " hari・Cuti " + leave + " hari</span></div>";
+  return html;
+}
+
+/* ===================================================================
+   管理員版：按人收合
+   =================================================================== */
+function renderAdminView(rows){
+  if(!rows.length) return renderEmpty(true);
+  markSeq(rows);
+
+  /* 依 empId 分組（後端已依日期→員工編號排序，此處保持出現順序） */
+  Q_cache = {};
+  var order = [], nameOf = {};
+  rows.forEach(function(r){
+    var id = String(r.empId);
+    if(!Q_cache[id]){ Q_cache[id] = []; order.push(id); nameOf[id] = r.name; }
+    Q_cache[id].push(r);
+  });
+  order.sort(function(a,b){ return Number(a) - Number(b); });
+
+  var blocks = "", totalFlags = 0, anyOver = false, leaveByName = {};
+
+  order.forEach(function(id){
+    var s = calcSummary(Q_cache[id]);
+    totalFlags += s.flags;
+    if(s.overnight) anyOver = true;
+
+    Q_cache[id].forEach(function(r){
+      if(r.status !== "請假") return;
+      var nm = r.name || nameOf[id];
+      if(!leaveByName[nm]) leaveByName[nm] = [];
+      var d = Number(String(r.date).substr(8,2));
+      if(leaveByName[nm].indexOf(d) < 0) leaveByName[nm].push(d);
+    });
+
+    var meta = "出勤 " + s.attend + (s.leave ? "・請假 " + s.leave : "");
+    blocks += "<div class=\"box\" data-emp=\"" + esc(id) + "\">"
+            + "<div class=\"box-head\"><span class=\"ttl\">"
+            + "<span class=\"p-name\">" + esc(nameOf[id]) + "</span>"
+            + "<span class=\"p-meta\">" + meta + "</span>"
+            + (s.flags ? "<span class=\"p-flag\">🔴 " + s.flags + "</span>" : "")
+            + "</span><span class=\"arrow\">▼</span></div>"
+            + "<div class=\"box-body\"></div></div>";
+  });
+
+  var head = (totalFlags === 0)
+    ? "<div class=\"allclear\">✅ 本月 " + order.length + " 人資料皆完整</div>"
+    : "";
+
+  var tail = renderPlusFootnote(anyOver, true);
+
+  var names = Object.keys(leaveByName);
+  if(names.length){
+    var totalLeave = 0;
+    names.forEach(function(n){ totalLeave += leaveByName[n].length; });
+    var listHtml = names.map(function(n){
+      return "<div class=\"leave-row\"><div class=\"nm\">" + esc(n) + "</div>"
+           + "<div class=\"dd\">"
+           + leaveByName[n].sort(function(a,b){ return a-b; }).join(", ")
+           + "</div></div>";
+    }).join("");
+    tail += "<div class=\"box\"><div class=\"box-head\">"
+          + "<span class=\"ttl\">本月請假　" + totalLeave + " 人日</span>"
+          + "<span class=\"arrow\">▼</span></div>"
+          + "<div class=\"box-body\"><div class=\"pad\">" + listHtml + "</div></div></div>";
+  }else{
+    tail += "<div class=\"summary\">本月無人請假</div>";
+  }
+
+  return head + blocks + tail;
+}
+
+/* 展開時才建立該員工的表格 DOM（15 人 × 31 天不預先渲染） */
+function expandPerson(box){
+  var id   = box.getAttribute("data-emp");
+  var body = box.querySelector(".box-body");
+  if(body.getAttribute("data-done") === "1") return;
+  var rows = Q_cache[id] || [];
+  var s = calcSummary(rows);
+  body.innerHTML = renderTable(rows, true)
+    + "<div class=\"p-total\">出勤 " + s.attend + " 天・請假 " + s.leave
+    + " 天・" + s.hours + " 小時</div>";
+  body.setAttribute("data-done", "1");
+}
+
+/* ===================================================================
+   查詢主流程
+   =================================================================== */
+function renderTitle(){
+  document.getElementById("pageTitle").innerHTML = Q_ME.isAdmin
+    ? "全體出勤紀錄"
+    : esc(Q_ME.name) + "的出勤紀錄<span class=\"sub\">Absensi</span>";
+}
+function renderFootNote(){
+  document.getElementById("footNote").innerHTML = Q_ME.isAdmin
+    ? "時數為在場紀錄，加班依公司規定申請核准"
+    : "時數為在場紀錄，加班依公司規定申請核准"
+      + "<span class=\"id\">Jam kerja adalah catatan kehadiran; "
+      + "lembur harus diajukan dan disetujui</span>";
+}
+
+async function doQuery(){
+  var my = ++Q_gen;
+  var box = document.getElementById("result");
+  box.innerHTML = "<div class=\"table-card\"><div class=\"center-box\">"
+                + "<div class=\"spinner\"></div>"
+                + "<div class=\"msg\">查詢中…<span class=\"id\">Mencari…</span></div></div></div>";
+
+  var params = { userId: Q_UID, year: Q_state.year, month: Q_state.month };
+  if(Q_ME.isAdmin) params.emp = "all";
+
+  var res;
+  try{
+    res = await apiGetX("query_data", params);
+  }catch(e){
+    if(my !== Q_gen) return;                     // 已有更新的查詢
+    box.innerHTML = "<div class=\"table-card\"><div class=\"center-box err\">"
+      + "<div class=\"msg\">查詢失敗，請重試"
+      + "<span class=\"id\">Gagal memuat. Silakan coba lagi.</span></div></div></div>";
+    return;
+  }
+  if(my !== Q_gen) return;
+
+  if(!res || !res.ok){
+    box.innerHTML = "<div class=\"table-card\"><div class=\"center-box err\">"
+      + "<div class=\"msg\">" + esc((res && res.msg) || "查詢失敗") + "</div></div></div>";
+    return;
+  }
+
+  var rows = res.rows || [];
+  box.innerHTML = Q_ME.isAdmin ? renderAdminView(rows)
+                               : renderEmployeeView(rows, res.summary);
+
+  /* 收合事件 */
+  var heads = box.querySelectorAll(".box .box-head");
+  Array.prototype.forEach.call(heads, function(h){
+    h.addEventListener("click", function(){
+      var b = h.parentNode;
+      if(b.getAttribute("data-emp")) expandPerson(b);
+      b.classList.toggle("open");
+    });
+  });
+}
+
+/* ===================================================================
+   篩選列
+   =================================================================== */
+function initFilters(){
+  var now = new Date();
+  var thisYear = now.getFullYear();
+  var from = Math.max(thisYear - 4, Q_SYSTEM_START_YEAR);
+  if(thisYear < Q_SYSTEM_START_YEAR) from = thisYear;    // 防呆：系統時間異常
+
+  Q_state.year  = thisYear;
+  Q_state.month = now.getMonth() + 1;
+
+  var ys = document.getElementById("selYear");
+  ys.innerHTML = "";
+  for(var y = thisYear; y >= from; y--){
+    ys.innerHTML += "<option value=\"" + y + "\">" + y + "</option>";
+  }
+  ys.value = Q_state.year;
+
+  var ms = document.getElementById("selMonth");
+  ms.innerHTML = "";
+  for(var m = 1; m <= 12; m++){
+    ms.innerHTML += "<option value=\"" + m + "\">" + m + " 月</option>";
+  }
+  ms.value = Q_state.month;
+
+  ys.onchange = function(){ Q_state.year  = Number(this.value); doQuery(); };
+  ms.onchange = function(){ Q_state.month = Number(this.value); doQuery(); };
+
+  document.getElementById("lbYear").textContent  = Q_ME.isAdmin ? "年" : "年 / Tahun";
+  document.getElementById("lbMonth").textContent = Q_ME.isAdmin ? "月" : "月 / Bulan";
+}
+
+/* ===================================================================
+   啟動
+   =================================================================== */
+var Q_UID = "";
+
+async function main(){
+  /* 逾時保護：任何環節卡住都不會永遠停在載入中 */
+  Q_bootTimer = setTimeout(function(){
+    fail("載入逾時，請重新載入頁面");
+  }, Q_BOOT_TIMEOUT_MS);
+
+  try{
+    stage("1-init-liff");
+    Q_UID = await initLiffAndGetUserId();
+    if(!Q_UID) throw new Error("無法取得身分");
+
+    stage("2-whoami");
+    var who = await apiGetX("whoami", { userId: Q_UID });
+    if(!who) throw new Error("身分查詢無回應");
+
+    /* ⚠️ 判斷順序不可調換：管理員可不在員工主檔，
+       此時 whoami 會同時回傳 isAdmin:true 與 needRegister:true */
+    if(who.isAdmin){
+      Q_ME.isAdmin = true;
+      Q_ME.name    = who.name || "";
+      Q_ME.empId   = who.empId || "";
+    }else if(who.needRegister){
+      clearTimeout(Q_bootTimer); Q_bootTimer = null;
+      stage("2b-need-register");
+      showScreen("scNeedReg");
+      return;
+    }else if(!who.ok){
+      throw new Error(who.msg || "身分驗證失敗");
+    }else{
+      Q_ME.isAdmin = false;
+      Q_ME.name    = who.name || "";
+      Q_ME.empId   = who.empId || "";
+    }
+
+    stage("3-build-ui");
+    clearTimeout(Q_bootTimer); Q_bootTimer = null;
+    renderTitle();
+    renderFootNote();
+    initFilters();
+    showScreen("scMain");
+
+    stage("4-first-query");
+    await doQuery();
+    stage("5-done");
+
+  }catch(e){
+    fail((e && e.message) ? e.message : "載入失敗");
+  }
+}
+
+document.getElementById("btnGoReg").addEventListener("click", function(){
+  goPage("register.html");
+});
+
+main();
+</script>
+</body>
+</html>
