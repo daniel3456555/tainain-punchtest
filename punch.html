@@ -288,9 +288,9 @@ function setStage(s){
    乙案：兩次都在 15 秒內收掉，避免紅屏之後才跳出 QR
    ⚠️ qr_issue 為純函式（規格書第288行：無副作用），重複執行安全
    ⚠️ 變數名稱不得與 common.js 常數衝突                      */
-var QR_RESEND_DELAY_MS   = 50;      // ⚠️ 測試用
-var QR_FIRST_TIMEOUT_MS  = 100;     // ⚠️ 測試用
-var QR_SECOND_TIMEOUT_MS = 100;     // ⚠️ 測試用
+var QR_RESEND_DELAY_MS   = 7000;
+var QR_FIRST_TIMEOUT_MS  = 15000;
+var QR_SECOND_TIMEOUT_MS = 8000;
 var QR_WIN_TAG = '';                // 診斷用：哪一次贏了
 
 function requestQrTwice(myGen){
@@ -404,7 +404,7 @@ function feLogSend(items, mode, deleteOnOk){
     };
   });
 
-    fetch(API_BASE + 'XXX_TEST_FAIL', {     // ⚠️ 測試用，測完改回 API_BASE
+    fetch(API_BASE, {
     method: 'POST',
     body: new URLSearchParams({ action:'fe_log', payload: JSON.stringify(payload) })
   })
