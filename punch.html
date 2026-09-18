@@ -281,6 +281,64 @@ function setStage(s){
   });
 })();
 
+/* ── QR 請求：主送 ＋ 7秒補送（並行，首達為準） ──────────────
+   背景：9/10 實測確認後端執行成功但回應在回程遺失（302 轉址）
+   策略：7秒未回即補送第二次，兩次並行、誰先回來用誰
+   乙案：兩次都在 15 秒內收掉，避免紅屏之後才跳出 QR
+   ⚠️ qr_issue 為純函式（規格書第288行：無副作用），重複執行安全
+   ⚠️ 變數名稱不得與 common.js 常數衝突                      */
+var QR_RESEND_DELAY_MS   = 7000;    // 幾秒後補送
+var QR_FIRST_TIMEOUT_MS  = 15000;   // 第一次的逾時
+var QR_SECOND_TIMEOUT_MS = 8000;    // 第二次的逾時（7+8=15）
+var QR_WIN_TAG = '';                // 診斷用：哪一次贏了
+
+function requestQrTwice(myGen){
+  return new Promise(function(resolve, reject){
+    var done        = false;   // 首達鎖
+    var finished    = 0;       // 已失敗的次數
+    var resendTimer = null;
+    var lastErr     = null;
+
+    function launch(timeoutMs, tag){
+      apiGet('qr_issue', { userId: USER_ID, type: TYPE }, timeoutMs)
+        .then(function(d){
+          if(done || myGen !== generation) return;
+          done = true;
+          if(resendTimer){ clearTimeout(resendTimer); resendTimer = null; }
+          QR_WIN_TAG = tag;
+          resolve(d);
+        })
+        .catch(function(err){
+          lastErr = err;
+          finished++;
+          if(done || myGen !== generation) return;
+
+          /* 第一次提早失敗（例如404）→ 不等7秒，立刻補送 */
+          if(tag === 'A' && resendTimer){
+            clearTimeout(resendTimer); resendTimer = null;
+            setStage('H2-補送QR請求（提早）');
+            launch(QR_SECOND_TIMEOUT_MS, 'B');
+            return;
+          }
+          /* 兩次都失敗才回報失敗 */
+          if(finished >= 2){
+            done = true;
+            reject(lastErr);
+          }
+        });
+    }
+
+    launch(QR_FIRST_TIMEOUT_MS, 'A');
+
+    resendTimer = setTimeout(function(){
+      resendTimer = null;
+      if(done || myGen !== generation) return;
+      setStage('H2-補送QR請求');
+      launch(QR_SECOND_TIMEOUT_MS, 'B');
+    }, QR_RESEND_DELAY_MS);
+  });
+}
+ 
 /* ── 主流程：簽發QR → 顯示 → 倒數＋輪詢 ── */
 function startFlow(){
   stopTimers();
@@ -289,7 +347,7 @@ function startFlow(){
   show('scr-processing');
   setStage('H-取得QR');
 
-  apiGet('qr_issue', { userId: USER_ID, type: TYPE })
+  requestQrTwice(myGen)
     .then(function(d){
       if(myGen !== generation) return;
       onQrIssued(d, myGen);
