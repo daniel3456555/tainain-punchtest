@@ -213,6 +213,7 @@ function setStage(s){
 
 /* ── 進入點 ── */
 (function init(){
+   feLogFlush();                            // ⭐ 補送積存（非同步，不擋主流程）
   document.getElementById('type-zh').textContent = TYPE==='in'?'上班打卡':'下班打卡';
   document.getElementById('type-id').textContent = TYPE==='in'?'Absen Masuk':'Absen Pulang';
 
@@ -287,9 +288,9 @@ function setStage(s){
    乙案：兩次都在 15 秒內收掉，避免紅屏之後才跳出 QR
    ⚠️ qr_issue 為純函式（規格書第288行：無副作用），重複執行安全
    ⚠️ 變數名稱不得與 common.js 常數衝突                      */
-var QR_RESEND_DELAY_MS   = 7000;    // 測試時暫時改 200，現已改回
-var QR_FIRST_TIMEOUT_MS  = 15000;   // 第一次的逾時
-var QR_SECOND_TIMEOUT_MS = 8000;    // 第二次的逾時（7+8=15）
+var QR_RESEND_DELAY_MS   = 50;      // ⚠️ 測試用
+var QR_FIRST_TIMEOUT_MS  = 100;     // ⚠️ 測試用
+var QR_SECOND_TIMEOUT_MS = 100;     // ⚠️ 測試用
 var QR_WIN_TAG = '';                // 診斷用：哪一次贏了
 
 function requestQrTwice(myGen){
@@ -338,6 +339,92 @@ function requestQrTwice(myGen){
     }, QR_RESEND_DELAY_MS);
   });
 }
+
+/* ── 前端異常紀錄（紅屏才記錄） ──────────────────────────
+   設計要點（歷經討論定案）：
+   ① 先寫 localStorage（同步、必然成功），再顯示紅屏
+   ② 即時送出「不刪除」——那個時間點員工正要關頁，送出多半被中斷
+   ③ 只有補送並收到後端確認才刪除
+   ④ 後端以 id 去重，重複送出不會變成兩筆
+   ⚠️ 只記錄基礎設施失敗；業務拒絕與 QR 繪圖失敗不記錄     */
+var FE_LOG_KEY       = 'punchFailLog';
+var FE_LOG_MAX_ITEMS = 20;
+
+function feLogRead(){
+  try{
+    var v = JSON.parse(localStorage.getItem(FE_LOG_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  }catch(e){ return []; }
+}
+function feLogWrite(list){
+  try{ localStorage.setItem(FE_LOG_KEY, JSON.stringify(list)); }catch(e){}
+}
+
+/* 由錯誤訊息判定失敗類型 */
+function feLogClassify(err){
+  var m = (err && err.message) ? err.message : '';
+  if(m.indexOf('逾時') >= 0)        return 'TIMEOUT';
+  if(m.indexOf('非 JSON') >= 0)     return 'HTML_404';
+  return 'NET_FAIL';
+}
+
+/* 紅屏當下呼叫：先存本機，再背景試送（不等、不刪） */
+function feLogRecord(err){
+  var id = (window.crypto && crypto.randomUUID)
+           ? crypto.randomUUID()
+           : 'f' + Date.now() + '_' + Math.floor(Math.random()*1e9);
+
+  var item = {
+    id: id,
+    userId: USER_ID || '',
+    type: feLogClassify(err),
+    at: Date.now()            // 僅供計算 ageSec，不送絕對時間
+  };
+
+  var list = feLogRead();
+  list.push(item);
+  if(list.length > FE_LOG_MAX_ITEMS) list = list.slice(-FE_LOG_MAX_ITEMS);
+  feLogWrite(list);           // ⭐ 同步完成，資料已安全
+
+  feLogSend([item], 'instant', false);   // 背景試送，不刪除
+}
+
+/* 送出；keep=false 表示不刪（即時），keep=true 表示成功後刪除（補送） */
+function feLogSend(items, mode, deleteOnOk){
+  if(!items || items.length === 0) return;
+
+  var now = Date.now();
+  var payload = items.map(function(it){
+    return {
+      id: it.id,
+      userId: it.userId,
+      type: it.type,
+      ageSec: Math.max(0, Math.round((now - it.at) / 1000)),
+      mode: mode
+    };
+  });
+
+  fetch(API_BASE, {
+    method: 'POST',
+    body: new URLSearchParams({ action:'fe_log', payload: JSON.stringify(payload) })
+  })
+  .then(function(r){ return r.text(); })
+  .then(function(t){
+    var res = JSON.parse(t);
+    if(!res.ok || !deleteOnOk) return;
+    /* ⭐ 只有收到明確確認才刪除，且只刪這次送出的 id */
+    var sent = {};
+    for(var i=0;i<items.length;i++) sent[items[i].id] = true;
+    feLogWrite(feLogRead().filter(function(x){ return !sent[x.id]; }));
+  })
+  .catch(function(){ /* 失敗就留著，下次再送 */ });
+}
+
+/* 補送：頁面載入時、以及 qr_issue 成功時各呼叫一次 */
+function feLogFlush(){
+  var list = feLogRead();
+  if(list.length > 0) feLogSend(list, 'queued', true);
+}
  
 /* ── 主流程：簽發QR → 顯示 → 倒數＋輪詢 ── */
 function startFlow(){
@@ -354,6 +441,7 @@ function startFlow(){
     })
     .catch(function(err){
       if(myGen !== generation) return;
+      feLogRecord(err);                    // ⭐ 先記錄，再顯示紅屏
       fail('連線失敗：' + (err && err.message ? err.message : ''));
     });
 }
@@ -384,6 +472,7 @@ function onQrIssued(d, myGen){
     return;
   }
 
+   feLogFlush();                            // ⭐ 網路已通，清出積存
   /* 倒數 */
   totalSec = d.validSeconds || 180;
   secLeft  = totalSec;
