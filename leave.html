@@ -634,7 +634,7 @@ async function routeAfterBoot(){
     show('s-form');
   }catch(err){
     document.getElementById('rej-msg').textContent = t('E_INIT');
-    document.getElementById('rej-sub').textContent = (err && err.message) ? err.message : t('FALLBACK');
+    document.getElementById('rej-sub').textContent = t('FALLBACK');
     document.getElementById('rejBack').style.display = 'none';
     show('s-reject');
   }
