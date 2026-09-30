@@ -76,16 +76,6 @@ async function apiGet(action, params, timeoutMs) {
 /* 初始化 LIFF 並取得 userId（含逾時保護）
    回傳 userId 字串；失敗則 throw Error */
 async function initLiffAndGetUserId() {
-  const params = getParams();
-
-  // 診斷模式：?debug=1 → 由 localStorage 讀取測試用 userId（避免 userId 出現在網址列）
-  // 首次使用：Console 執行 localStorage.setItem('devUid','U...')
-  if (params.get("debug")) {
-    const saved = localStorage.getItem("devUid");
-    if (saved) return saved;
-    throw new Error("診斷模式未設定：請在 Console 執行 localStorage.setItem('devUid','你的userId')");
-  }
-
   if (typeof liff === "undefined") throw new Error("LIFF SDK 未載入");
 
   const timeout = new Promise(function (_, reject) {
